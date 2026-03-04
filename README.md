@@ -148,24 +148,81 @@ game:
 
 ## 📈 测试场景
 
-### 1. 基础消息投递
+### 测试套件
+
+GateDemo 包含完整的测试套件，覆盖以下场景：
+
+| 测试场景 | 说明 | 状态 |
+|----------|------|------|
+| 基础连接测试 | 验证玩家连接和 Player-Gate 映射 | ✅ |
+| 断线重连 - 原 Gate 可用 | 玩家断线后重连到同一 Gate | ✅ |
+| 断线重连 - 原 Gate 不可用 | Gate 宕机后玩家重连到新 Gate | ✅ |
+| 消息投递失败处理 | 验证 Gate→Player 投递失败后的处理 | ✅ |
+| 消息重复处理 | 验证重复消息的处理机制 | ✅ |
+| 多玩家并发测试 | 验证多玩家并发连接和消息 | ✅ |
+
+### 运行测试
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 启动 Redis
+docker-compose up -d redis
+
+# 启动 Gate 服务
+python gate/main.py &
+
+# 启动 Game 服务
+python game/main.py &
+
+# 运行完整测试
+bash run_tests.sh run
+
+# 快速测试
+bash run_tests.sh quick
+
+# 压力测试（100 并发）
+bash run_tests.sh stress 100
+
+# 查看测试报告
+bash run_tests.sh report
+```
+
+### 测试报告示例
+
+```
+╔════════════════════════════════════════════════════════════╗
+║                    测试报告汇总                             ║
+╠════════════════════════════════════════════════════════════╣
+║  总计：  6  |  通过：  6  |  失败：  0  |  跳过：  0
+║  耗时：12.34 秒
+║  成功率：100.0%
+╚════════════════════════════════════════════════════════════╝
+```
+
+### 手动测试
+
+#### 1. 基础消息投递
 
 ```bash
 # 启动 Player 客户端
+cd player_client
 python client.py --player-id 100001 --gate-port 8888
 
-# Game 发送测试消息
+# 另一个终端：Game 发送测试消息
 python game/main.py --send-test --player-id 100001
 ```
 
-### 2. Gate 故障切换
+#### 2. Gate 故障切换
 
 ```bash
 # Player 连接 Gate-01
 python client.py --player-id 100001 --gate-port 8888
 
-# 停止 Gate-01
-# Player 自动重连 Gate-02
+# 停止 Gate-01 (Ctrl+C)
+
+# Player 重连 Gate-02
 python client.py --player-id 100001 --gate-port 8889
 
 # Game 发送消息，验证消息投递到新 Gate
