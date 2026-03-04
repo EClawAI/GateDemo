@@ -1,0 +1,33 @@
+# GateDemo 配置文件
+
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: null
+
+gate:
+  id: gate-01
+  host: 0.0.0.0
+  port: 8888
+  stream:
+    consumer_group: gate-01-cluster
+    consumer_name: gate-01-instance-a
+    block_ms: 5000
+    count: 100
+  player:
+    heartbeat_interval: 60  # 心跳续期间隔（秒）
+    map_ttl: 300  # Player-Gate 映射 TTL（秒）
+
+game:
+  id: game-1001
+  stream:
+    consumer_group: game-1001-cluster
+    consumer_name: game-1001-instance-a
+    block_ms: 5000
+    count: 100
+
+player_client:
+  server_host: localhost
+  server_port: 8888
+  heartbeat_interval: 30

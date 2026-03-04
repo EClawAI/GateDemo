@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  gate-01:
+    build:
+      context: .
+      dockerfile: Dockerfile.gate
+    ports:
+      - "8888:8888"
+    environment:
+      - GATE_ID=gate-01
+      - GATE_PORT=8888
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gate-02:
+    build:
+      context: .
+      dockerfile: Dockerfile.gate
+    ports:
+      - "8889:8888"
+    environment:
+      - GATE_ID=gate-02
+      - GATE_PORT=8888
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  game-1001:
+    build:
+      context: .
+      dockerfile: Dockerfile.game
+    environment:
+      - GAME_ID=game-1001
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis_data:
