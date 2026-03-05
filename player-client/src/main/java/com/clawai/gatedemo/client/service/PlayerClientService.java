@@ -72,7 +72,9 @@ public class PlayerClientService {
                 "type", "auth",
                 "player_id", playerConfig.getPlayerId()
             );
-            session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(authMessage)))).block();
+            // 异步发送，不使用 block()
+            session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(authMessage))))
+                .subscribe(null, error -> logger.error("Failed to send auth: {}", error.getMessage()));
             logger.info("Auth message sent");
         } catch (Exception e) {
             logger.error("Failed to send auth: {}", e.getMessage());
@@ -89,7 +91,8 @@ public class PlayerClientService {
                             "type", "heartbeat",
                             "player_id", playerConfig.getPlayerId()
                         );
-                        session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(heartbeat)))).block();
+                        session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(heartbeat))))
+                            .subscribe(null, error -> logger.debug("Heartbeat send error: {}", error.getMessage()));
                         logger.debug("Heartbeat sent");
                     }
                 } catch (InterruptedException e) {

@@ -8,7 +8,7 @@ spring:
 player:
   player-id: ${PLAYER_ID:100001}
   host: ${GATE_HOST:localhost}
-  port: ${GATE_PORT:8888}
+  port: ${GATE_PORT:8083}  # WebSocket 复用 HTTP 端口
   heartbeat-interval: 30
 
 logging:
