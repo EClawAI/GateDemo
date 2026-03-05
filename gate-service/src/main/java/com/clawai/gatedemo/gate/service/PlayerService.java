@@ -9,16 +9,15 @@ import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * 玩家服务（无 Redis 版本）
+ * 玩家服务（纯 Netty 版本）
  * 
  * 功能说明：
  * 1. 管理玩家连接（player_id ↔ Channel 映射）
@@ -59,20 +58,20 @@ public class PlayerService {
         io.netty.util.AttributeKey.valueOf("playerId");
 
     /**
-     * Gate 配置（由 Spring 自动注入）
-     */
-    private final GateConfig gateConfig;
-
-    /**
-     * JSON 序列化工具（由 Spring 自动注入）
+     * JSON 序列化工具
+     * 用于将 Java 对象转换为 JSON 字符串，或反之
      */
     private final ObjectMapper objectMapper;
 
     /**
-     * HTTP 客户端（用于调用 Game 服务）
-     * RestTemplate 是 Spring 提供的同步 HTTP 客户端
+     * Gate 配置
      */
-    private final RestTemplate restTemplate;
+    private final GateConfig gateConfig;
+
+    /**
+     * HTTP 客户端（用于调用 Game 服务）
+     */
+    private final GameHttpClient gameHttpClient;
 
     /**
      * 玩家连接映射表（内存存储）
@@ -89,12 +88,12 @@ public class PlayerService {
     private final ConcurrentMap<Long, Channel> players = new ConcurrentHashMap<>();
 
     /**
-     * 构造函数，注入依赖
+     * 构造函数
      */
     public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
-        this.restTemplate = new RestTemplate();
+        this.gameHttpClient = new GameHttpClient(gateConfig);
     }
 
     /**
@@ -238,43 +237,36 @@ public class PlayerService {
      * 与 Redis Stream 的区别：
      * - ❌ 不写入 Redis Stream
      * - ✅ 直接 HTTP 调用 Game 服务
-     * - ✅ 同步调用，等待响应
+     * - ✅ 异步调用，不等待响应
      * 
      * @param playerId 玩家 ID
      * @param gameId 游戏 ID
      * @param message 消息对象
      */
     public void forwardToGame(Long playerId, Integer gameId, PlayerMessage message) {
-        // 1. 构建 Game 服务 URL
-        String gameHost = gateConfig.getGame().getHost();
-        int gamePort = gateConfig.getGame().getPort();
-        String url = String.format("http://%s:%d/api/game/receive", gameHost, gamePort);
+        // 异步转发，不阻塞 Netty IO 线程
+        CompletableFuture.runAsync(() -> {
+            try {
+                // 1. 构建请求体
+                Map<String, Object> payload = Map.of(
+                    "gateId", gateConfig.getId(),
+                    "playerId", playerId,
+                    "gameId", gameId,
+                    "msgType", message.getMsgType() != null ? message.getMsgType() : "unknown",
+                    "seq", message.getSeq() != null ? message.getSeq() : 0,
+                    "timestamp", System.currentTimeMillis(),
+                    "body", message.getBody() != null ? message.getBody() : Map.of()
+                );
 
-        // 2. 构建请求体
-        Map<String, Object> payload = Map.of(
-            "gateId", gateConfig.getId(),
-            "playerId", playerId,
-            "gameId", gameId,
-            "msgType", message.getMsgType() != null ? message.getMsgType() : "unknown",
-            "seq", message.getSeq() != null ? message.getSeq() : 0,
-            "timestamp", System.currentTimeMillis(),
-            "body", message.getBody() != null ? message.getBody() : Map.of()
-        );
-
-        try {
-            // 3. 发送 HTTP POST 请求
-            ResponseEntity<String> response = restTemplate.postForEntity(url, payload, String.class);
-            
-            if (response.getStatusCode().is2xxSuccessful()) {
+                // 2. 发送 HTTP POST 请求
+                gameHttpClient.post("/api/game/receive", payload);
+                
                 logger.debug("📤 消息已转发到 Game: gameId={}, playerId={}", gameId, playerId);
-            } else {
-                logger.warn("⚠️ Game 服务返回异常：{}", response.getStatusCode());
+                
+            } catch (Exception e) {
+                logger.error("❌ 转发消息到 Game 失败：{}", e.getMessage());
             }
-            
-        } catch (Exception e) {
-            logger.error("❌ 转发消息到 Game 失败：{}", e.getMessage());
-            // 不抛异常，避免影响玩家连接
-        }
+        });
     }
 
     /**
@@ -284,23 +276,5 @@ public class PlayerService {
      */
     public int getOnlineCount() {
         return players.size();
-    }
-
-    /**
-     * 对象转 JSON 字符串（辅助方法）
-     * 
-     * @param obj 对象
-     * @return JSON 字符串，失败返回 "{}"
-     */
-    private String toJson(Object obj) {
-        if (obj == null) {
-            return "{}";
-        }
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (JsonProcessingException e) {
-            logger.warn("⚠️ JSON 序列化失败：{}", e.getMessage());
-            return "{}";
-        }
     }
 }

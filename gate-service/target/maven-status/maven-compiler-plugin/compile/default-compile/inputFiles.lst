@@ -1,6 +1,8 @@
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/service/PlayerService.java
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/config/HttpClientConfig.java
+/root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/service/GameHttpClient.java
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/config/NettyWebSocketServerConfig.java
+/root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/config/NettyWebSocketServer.java
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/model/PlayerMessage.java
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/GateServiceApplication.java
 /root/.openclaw/workspace/GateDemo/gate-service/src/main/java/com/clawai/gatedemo/gate/config/GateConfig.java
