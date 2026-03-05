@@ -77,6 +77,9 @@ public class GateWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        // 保存 playerId 到 session attributes
+        session.getAttributes().put("playerId", playerId);
+
         // 注册玩家
         playerService.registerPlayer(playerId, session);
 

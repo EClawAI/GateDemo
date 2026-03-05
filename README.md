@@ -1,27 +1,27 @@
-# GateDemo - 无状态游戏网关服务演示 (Java 实现)
+# GateDemo - 无状态游戏网关服务演示 (Java 实现) - 无 Redis 版本
 
-> 基于 Redis Stream 实现消息可靠投递的无状态 Gate 服务架构
+> 无 Redis 依赖的简化版 Gate 服务架构，Gate 与 Game 直接通过 HTTP 通信
 
 ## 📋 项目说明
 
-本项目演示了如何使用 Redis Stream 实现无状态游戏 Gate 服务，支持：
+本项目演示了无 Redis 依赖的游戏 Gate 服务架构，支持：
 
 - ✅ Gate 服务无状态化
-- ✅ 玩家切换 Gate 时消息不丢失
-- ✅ Gate/Game 水平扩展
-- ✅ 消息可靠投递（至少一次）
+- ✅ Gate 与 Game 直接 HTTP 通信
+- ✅ Game 服务内存消息缓存
+- ✅ 简化的部署架构（无需 Redis）
 
 ## 🏗️ 架构设计
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              整体架构                                        │
+│                              整体架构（无 Redis）                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│   Player ←→ Gate(无状态) ←→ Redis Stream ←→ Game(有状态)                   │
+│   Player ←→ Gate(无状态) ←→ HTTP 直连 → Game(有状态 + 内存缓存)            │
 │                                                                             │
-│   下行：Game → 查询 Player-Gate 映射 → 写入 Gate Stream → Gate 消费 → Player │
-│   上行：Player → Gate → 写入 Game Stream → Game 消费 → 处理                  │
+│   上行：Player → Gate → HTTP POST → Game → 处理                            │
+│   下行：Game → 内存缓存 → (玩家在线时直接推送)                              │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -67,16 +67,18 @@ GateDemo/
 
 ## 🚀 快速开始
 
-### 1. 启动 Redis
-
-```bash
-docker-compose up -d redis
-```
-
-### 2. 编译项目
+### 1. 编译项目
 
 ```bash
 mvn clean package -DskipTests
+```
+
+### 2. 启动 Game 服务
+
+```bash
+cd game-service
+java -jar target/game-service-1.0.0.jar
+# 或通过 IDE 运行 GameServiceApplication
 ```
 
 ### 3. 启动 Gate 服务
@@ -87,22 +89,14 @@ java -jar target/gate-service-1.0.0.jar
 # 或通过 IDE 运行 GateServiceApplication
 ```
 
-### 4. 启动 Game 服务
-
-```bash
-cd game-service
-java -jar target/game-service-1.0.0.jar
-# 或通过 IDE 运行 GameServiceApplication
-```
-
-### 5. 启动 Player 客户端
+### 4. 启动 Player 客户端
 
 ```bash
 cd player-client
 java -jar target/player-client-1.0.0.jar --player.player-id=100001
 ```
 
-### 6. 使用 Docker Compose 启动所有服务
+### 5. 使用 Docker Compose 启动所有服务
 
 ```bash
 docker-compose up --build
@@ -120,16 +114,11 @@ gate:
   id: gate-01
   host: 0.0.0.0
   port: 8888
-  redis:
+  game:
     host: localhost
-    port: 6379
-    stream:
-      consumer-group: gate-01-cluster
-      block-ms: 5000
-      count: 100
+    port: 8081
   player:
     heartbeat-interval: 60
-    map-ttl: 300
 ```
 
 ### Game 服务配置 (game-service/src/main/resources/application.yml)
@@ -140,11 +129,9 @@ server:
 
 game:
   id: game-1001
-  redis:
-    host: localhost
-    port: 6379
-    stream:
-      consumer-group: game-1001-cluster
+  cache:
+    max-size: 10000
+    expire-minutes: 30
 ```
 
 ### Player 客户端配置 (player-client/src/main/resources/application.yml)
@@ -197,37 +184,33 @@ player:
 
 ## 🔧 核心设计
 
-### Player-Gate 映射表
+### Gate-Game 直接通信
 
-```redis
-# Key: player:gate:{player_id}
-# Value: {gate_id}
-# TTL: 300 秒
+Gate 服务通过 HTTP POST 直接将消息发送到 Game 服务：
 
-SET player:gate:100001 gate-01 EX 300
-GET player:gate:100001
+```http
+POST http://game-service:8081/api/game/receive
+Content-Type: application/json
+
+{
+  "gateId": "gate-01",
+  "playerId": 100001,
+  "gameId": 1001,
+  "msgType": "battle.move",
+  "seq": 123,
+  "timestamp": 1234567890,
+  "body": {...}
+}
 ```
 
-### 下行 Stream（Gate 级别）
+### Game 服务内存消息缓存
 
-```redis
-# Key: stream:down:gate:{gate_id}
-# 每个 Gate 一个独立 Stream
+Game 服务使用内存缓存玩家消息（ConcurrentHashMap + LinkedBlockingQueue）：
 
-XADD stream:down:gate:01 * player_id 100001 msg_type battle.update body {...}
-XREADGROUP GROUP gate-01-cluster gate-01-instance-a STREAMS stream:down:gate:01 >
-XACK stream:down:gate:01 gate-01-cluster {message_id}
-```
-
-### 上行 Stream（Game 级别）
-
-```redis
-# Key: stream:up:game:{game_id}
-# 每个 Game 一个 Stream，所有 Gate 写入
-
-XADD stream:up:game:1001 * gate_id gate-01 player_id 100001 msg_type battle.move
-XREADGROUP GROUP game-1001-cluster game-1001-instance-a STREAMS stream:up:game:1001 >
-```
+- 每个玩家一个消息队列
+- 队列大小限制：默认 10000 条
+- 过期策略：可配置（默认 30 分钟）
+- 玩家上线时从队列中取出消息推送
 
 ## 🧪 测试
 
@@ -249,16 +232,16 @@ mvn verify
 |------|------|
 | 框架 | Spring Boot 3.2 |
 | WebSocket | Spring WebSocket |
-| Redis | Lettuce (Reactive) |
+| HTTP 通信 | Spring RestClient |
 | 构建 | Maven |
 | Java | JDK 17+ |
 
 ## 📝 注意事项
 
-1. **Redis 要求**: Redis 6.0+（支持 Stream Consumer Group）
-2. **Java 版本**: JDK 17+
-3. **网络要求**: Gate/Game/Redis 之间需要低延迟网络
-4. **生产建议**: Redis 集群部署，开启持久化
+1. **Java 版本**: JDK 17+
+2. **网络要求**: Gate/Game 之间需要低延迟网络
+3. **内存限制**: Game 服务内存缓存消息，注意内存使用
+4. **生产建议**: 考虑添加消息持久化（数据库或本地文件）
 
 ## 🔗 相关文档
 

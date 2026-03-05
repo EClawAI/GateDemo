@@ -8,30 +8,20 @@ import org.springframework.context.annotation.Configuration;
 public class GameConfig {
 
     private String id = "game-1001";
-    private Redis redis = new Redis();
+    private Cache cache = new Cache();
 
-    public static class Redis {
-        private String host = "localhost";
-        private int port = 6379;
-        private Stream stream = new Stream();
+    public static class Cache {
+        private int maxSize = 10000;
+        private int expireMinutes = 30;
 
-        public static class Stream {
-            private String consumerGroup;
-
-            public String getConsumerGroup() { return consumerGroup; }
-            public void setConsumerGroup(String consumerGroup) { this.consumerGroup = consumerGroup; }
-        }
-
-        public String getHost() { return host; }
-        public void setHost(String host) { this.host = host; }
-        public int getPort() { return port; }
-        public void setPort(int port) { this.port = port; }
-        public Stream getStream() { return stream; }
-        public void setStream(Stream stream) { this.stream = stream; }
+        public int getMaxSize() { return maxSize; }
+        public void setMaxSize(int maxSize) { this.maxSize = maxSize; }
+        public int getExpireMinutes() { return expireMinutes; }
+        public void setExpireMinutes(int expireMinutes) { this.expireMinutes = expireMinutes; }
     }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
-    public Redis getRedis() { return redis; }
-    public void setRedis(Redis redis) { this.redis = redis; }
+    public Cache getCache() { return cache; }
+    public void setCache(Cache cache) { this.cache = cache; }
 }

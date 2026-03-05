@@ -1,19 +1,6 @@
 version: '3.8'
 
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   gate-01:
     build:
       context: ./gate-service
@@ -23,10 +10,10 @@ services:
     environment:
       - GATE_ID=gate-01
       - GATE_PORT=8888
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - GAME_HOST=game-1001
+      - GAME_PORT=8081
     depends_on:
-      redis:
+      game-1001:
         condition: service_healthy
     networks:
       - gatedemo
@@ -40,10 +27,10 @@ services:
     environment:
       - GATE_ID=gate-02
       - GATE_PORT=8888
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - GAME_HOST=game-1001
+      - GAME_PORT=8081
     depends_on:
-      redis:
+      game-1001:
         condition: service_healthy
     networks:
       - gatedemo
@@ -56,11 +43,11 @@ services:
       - "8081:8081"
     environment:
       - GAME_ID=game-1001
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      redis:
-        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/game/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - gatedemo
 
@@ -76,9 +63,6 @@ services:
       - gate-01
     networks:
       - gatedemo
-
-volumes:
-  redis-data:
 
 networks:
   gatedemo:
