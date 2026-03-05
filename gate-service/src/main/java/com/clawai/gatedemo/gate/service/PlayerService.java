@@ -4,27 +4,37 @@ import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.lettuce.core.api.reactive.RedisReactiveCommands;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * 玩家服务
+ * 玩家服务（无 Redis 版本）
  * 
  * 功能说明：
  * 1. 管理玩家连接（player_id ↔ Channel 映射）
- * 2. 维护 Player-Gate 映射表（Redis）
- * 3. 发送消息给玩家
- * 4. 转发玩家消息到 Game 服务
+ * 2. 发送消息给玩家
+ * 3. 转发玩家消息到 Game 服务（通过 HTTP）
+ * 
+ * 与 Redis 版本的区别：
+ * - ❌ 不使用 Redis 存储 Player-Gate 映射
+ * - ❌ 不使用 Redis Stream 转发消息
+ * - ✅ 使用 ConcurrentHashMap 存储玩家连接
+ * - ✅ 使用 HTTP 直接调用 Game 服务
+ * 
+ * 适用场景：
+ * - 单机部署（Gate 和 Game 在同一台服务器）
+ * - 开发/测试环境
+ * - 简单演示
  * 
  * 线程安全：
  * 使用 ConcurrentHashMap 保证多线程安全
@@ -50,15 +60,8 @@ public class PlayerService {
 
     /**
      * Gate 配置（由 Spring 自动注入）
-     * 包含 Gate ID、Redis 配置、玩家配置等
      */
     private final GateConfig gateConfig;
-
-    /**
-     * Redis 命令接口（由 Spring 自动注入）
-     * 提供响应式的 Redis 操作
-     */
-    private final RedisReactiveCommands<String, String> redisCommands;
 
     /**
      * JSON 序列化工具（由 Spring 自动注入）
@@ -66,24 +69,32 @@ public class PlayerService {
     private final ObjectMapper objectMapper;
 
     /**
-     * 玩家连接映射表
+     * HTTP 客户端（用于调用 Game 服务）
+     * RestTemplate 是 Spring 提供的同步 HTTP 客户端
+     */
+    private final RestTemplate restTemplate;
+
+    /**
+     * 玩家连接映射表（内存存储）
      * Key: player_id（玩家 ID）
      * Value: Channel（Netty 连接通道）
      * 
      * 使用 ConcurrentHashMap 保证线程安全
      * 支持高并发读写
+     * 
+     * 注意：
+     * - 重启后数据会丢失（无持久化）
+     * - 多实例部署时数据不共享
      */
     private final ConcurrentMap<Long, Channel> players = new ConcurrentHashMap<>();
 
     /**
      * 构造函数，注入依赖
      */
-    public PlayerService(GateConfig gateConfig, 
-                        RedisReactiveCommands<String, String> redisCommands, 
-                        ObjectMapper objectMapper) {
+    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper) {
         this.gateConfig = gateConfig;
-        this.redisCommands = redisCommands;
         this.objectMapper = objectMapper;
+        this.restTemplate = new RestTemplate();
     }
 
     /**
@@ -93,29 +104,19 @@ public class PlayerService {
      * 
      * 功能：
      * 1. 将 player_id 与 Channel 绑定
-     * 2. 在 Redis 中记录 Player-Gate 映射
-     * 3. 设置 TTL（过期时间）
+     * 2. 存入本地内存映射表
+     * 
+     * 注意：
+     * - 不写入 Redis（无 Redis 版本）
+     * - 重启后数据丢失
      * 
      * @param playerId 玩家 ID
      * @param channel Netty 通道
      */
     public void registerPlayer(Long playerId, Channel channel) {
-        // 1. 存入本地映射表
+        // 存入本地映射表
         players.put(playerId, channel);
-        logger.info("📝 玩家 {} 已注册到本地映射表", playerId);
-
-        // 2. 注册到 Redis
-        // Key: player:gate:{player_id}
-        // Value: {gate_id}
-        // TTL: 300 秒（5 分钟）
-        String key = "player:gate:" + playerId;
-        int ttl = gateConfig.getPlayer().getMapTtl();
-        
-        redisCommands.setex(key, ttl, gateConfig.getId())
-            .subscribe(
-                result -> logger.info("✅ 玩家 {} 已注册到 Redis (Gate={}, TTL={}s)", playerId, gateConfig.getId(), ttl),
-                error -> logger.error("❌ Redis 注册失败：{}", error.getMessage())
-            );
+        logger.info("📝 玩家 {} 已注册 (内存存储，当前在线：{})", playerId, players.size());
     }
 
     /**
@@ -125,22 +126,16 @@ public class PlayerService {
      * 
      * 功能：
      * 1. 从本地映射表移除
-     * 2. 从 Redis 删除 Player-Gate 映射
+     * 
+     * 注意：
+     * - 不操作 Redis（无 Redis 版本）
      * 
      * @param playerId 玩家 ID
      */
     public void unregisterPlayer(Long playerId) {
-        // 1. 从本地映射表移除
+        // 从本地映射表移除
         players.remove(playerId);
-        logger.debug("🗑️ 玩家 {} 已从本地映射表移除", playerId);
-
-        // 2. 从 Redis 删除
-        String key = "player:gate:" + playerId;
-        redisCommands.del(key)
-            .subscribe(
-                deleted -> logger.info("✅ 玩家 {} 已从 Redis 注销", playerId),
-                error -> logger.error("❌ Redis 注销失败：{}", error.getMessage())
-            );
+        logger.info("🗑️ 玩家 {} 已注销 (当前在线：{})", playerId, players.size());
     }
 
     /**
@@ -166,23 +161,13 @@ public class PlayerService {
     /**
      * 续期心跳
      * 
-     * 当收到玩家心跳消息时调用
-     * 
-     * 功能：
-     * 刷新 Redis 中 Player-Gate 映射的 TTL
-     * 防止映射过期导致玩家掉线
+     * 无 Redis 版本中，心跳仅用于检测连接状态
+     * 不需要刷新 Redis TTL
      * 
      * @param playerId 玩家 ID
      */
     public void renewHeartbeat(Long playerId) {
-        String key = "player:gate:" + playerId;
-        int ttl = gateConfig.getPlayer().getMapTtl();
-        
-        redisCommands.expire(key, ttl)
-            .subscribe(
-                renewed -> logger.debug("💓 玩家 {} 心跳续期 (TTL={}s)", playerId, ttl),
-                error -> logger.warn("⚠️ 心跳续期失败：{}", error.getMessage())
-            );
+        logger.debug("💓 玩家 {} 心跳", playerId);
     }
 
     /**
@@ -243,48 +228,53 @@ public class PlayerService {
     }
 
     /**
-     * 转发玩家消息到 Game 服务
+     * 转发玩家消息到 Game 服务（HTTP 方式）
      * 
      * 功能：
-     * 1. 将消息写入 Redis Stream（上行）
-     * 2. Game 服务消费 Stream 处理游戏逻辑
+     * 1. 构建 HTTP 请求
+     * 2. 发送到 Game 服务
+     * 3. Game 服务处理游戏逻辑
      * 
-     * Stream 结构：
-     * Key: stream:up:game:{game_id}
-     * Fields:
-     *   - gate_id: 网关 ID
-     *   - player_id: 玩家 ID
-     *   - msg_type: 消息类型
-     *   - seq: 序列号
-     *   - timestamp: 时间戳
-     *   - body: 消息体（JSON）
+     * 与 Redis Stream 的区别：
+     * - ❌ 不写入 Redis Stream
+     * - ✅ 直接 HTTP 调用 Game 服务
+     * - ✅ 同步调用，等待响应
      * 
      * @param playerId 玩家 ID
      * @param gameId 游戏 ID
      * @param message 消息对象
      */
     public void forwardToGame(Long playerId, Integer gameId, PlayerMessage message) {
-        // 1. 构建 Stream Key
-        String streamKey = "stream:up:game:" + gameId;
+        // 1. 构建 Game 服务 URL
+        String gameHost = gateConfig.getGame().getHost();
+        int gamePort = gateConfig.getGame().getPort();
+        String url = String.format("http://%s:%d/api/game/receive", gameHost, gamePort);
 
-        // 2. 构建消息字段
-        Map<String, String> fields = Map.of(
-            "gate_id", gateConfig.getId(),
-            "player_id", String.valueOf(playerId),
-            "msg_type", message.getMsgType() != null ? message.getMsgType() : "unknown",
-            "seq", String.valueOf(message.getSeq() != null ? message.getSeq() : 0),
-            "timestamp", String.valueOf(System.currentTimeMillis()),
-            "body", toJson(message.getBody())
+        // 2. 构建请求体
+        Map<String, Object> payload = Map.of(
+            "gateId", gateConfig.getId(),
+            "playerId", playerId,
+            "gameId", gameId,
+            "msgType", message.getMsgType() != null ? message.getMsgType() : "unknown",
+            "seq", message.getSeq() != null ? message.getSeq() : 0,
+            "timestamp", System.currentTimeMillis(),
+            "body", message.getBody() != null ? message.getBody() : Map.of()
         );
 
-        // 3. 写入 Redis Stream
-        // xadd 返回消息 ID（如：1612345678901-0）
-        redisCommands.xadd(streamKey, fields)
-            .subscribe(
-                msgId -> logger.debug("📤 消息已转发到 Game: gameId={}, playerId={}, msgId={}", 
-                    gameId, playerId, msgId),
-                error -> logger.error("❌ 转发消息失败：{}", error.getMessage())
-            );
+        try {
+            // 3. 发送 HTTP POST 请求
+            ResponseEntity<String> response = restTemplate.postForEntity(url, payload, String.class);
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                logger.debug("📤 消息已转发到 Game: gameId={}, playerId={}", gameId, playerId);
+            } else {
+                logger.warn("⚠️ Game 服务返回异常：{}", response.getStatusCode());
+            }
+            
+        } catch (Exception e) {
+            logger.error("❌ 转发消息到 Game 失败：{}", e.getMessage());
+            // 不抛异常，避免影响玩家连接
+        }
     }
 
     /**
