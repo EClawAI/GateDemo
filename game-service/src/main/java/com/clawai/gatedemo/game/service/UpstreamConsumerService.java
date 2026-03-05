@@ -42,8 +42,8 @@ public class UpstreamConsumerService {
         String consumerGroup = gameConfig.getId() + "-cluster";
         String consumerName = gameConfig.getId() + "-instance-1";
 
-        // 创建 Consumer Group
-        redisCommands.xgroupCreate(streamKey, consumerGroup, "0", true)
+        // 创建 Consumer Group (使用 xgroupCreateMkstream 方法)
+        redisCommands.xgroupCreateMkstream(streamKey, consumerGroup, "0")
             .doOnError(e -> {
                 if (e.getMessage() != null && e.getMessage().contains("BUSYGROUP")) {
                     logger.info("Consumer group already exists: {}", consumerGroup);
