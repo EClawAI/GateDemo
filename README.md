@@ -1,4 +1,4 @@
-# GateDemo - 无状态游戏网关服务演示
+# GateDemo - 无状态游戏网关服务演示 (Java 实现)
 
 > 基于 Redis Stream 实现消息可靠投递的无状态 Gate 服务架构
 
@@ -30,24 +30,39 @@
 
 ```
 GateDemo/
-├── README.md           # 项目说明
-├── docker-compose.yml  # Docker 编排
-├── requirements.txt    # Python 依赖
-├── config/
-│   └── config.yaml     # 配置文件
-├── gate/
-│   ├── __init__.py
-│   ├── main.py         # Gate 服务入口
-│   ├── connection.py   # 玩家连接管理
-│   └── consumer.py     # Redis Stream 消费者
-├── game/
-│   ├── __init__.py
-│   ├── main.py         # Game 服务入口
-│   └── sender.py       # 消息发送器
-├── player_client/
-│   └── client.py       # 玩家模拟客户端
-└── scripts/
-    └── init_redis.lua  # Redis 初始化脚本
+├── pom.xml                      # Maven 父 POM
+├── docker-compose.yml           # Docker 编排
+├── gate-service/                # Gate 网关服务 (Spring Boot)
+│   ├── pom.xml
+│   └── src/main/
+│       ├── java/.../gate/
+│       │   ├── GateServiceApplication.java
+│       │   ├── config/          # 配置类
+│       │   ├── handler/        # WebSocket 处理器
+│       │   ├── model/          # 数据模型
+│       │   └── service/        # 业务服务
+│       └── resources/
+│           └── application.yml
+├── game-service/                # Game 游戏服务 (Spring Boot)
+│   ├── pom.xml
+│   └── src/main/
+│       ├── java/.../game/
+│       │   ├── GameServiceApplication.java
+│       │   ├── config/
+│       │   ├── controller/     # REST API
+│       │   ├── model/
+│       │   └── service/
+│       └── resources/
+│           └── application.yml
+└── player-client/               # 玩家客户端 (Spring Boot)
+    ├── pom.xml
+    └── src/main/
+        ├── java/.../client/
+        │   ├── PlayerClientApplication.java
+        │   ├── config/
+        │   └── service/
+        └── resources/
+            └── application.yml
 ```
 
 ## 🚀 快速开始
@@ -58,28 +73,129 @@ GateDemo/
 docker-compose up -d redis
 ```
 
-### 2. 启动 Gate 服务
+### 2. 编译项目
 
 ```bash
-cd gate
-python main.py
+mvn clean package -DskipTests
 ```
 
-### 3. 启动 Game 服务
+### 3. 启动 Gate 服务
 
 ```bash
-cd game
-python main.py
+cd gate-service
+java -jar target/gate-service-1.0.0.jar
+# 或通过 IDE 运行 GateServiceApplication
 ```
 
-### 4. 运行玩家客户端
+### 4. 启动 Game 服务
 
 ```bash
-cd player_client
-python client.py
+cd game-service
+java -jar target/game-service-1.0.0.jar
+# 或通过 IDE 运行 GameServiceApplication
 ```
 
-## 📊 核心设计
+### 5. 启动 Player 客户端
+
+```bash
+cd player-client
+java -jar target/player-client-1.0.0.jar --player.player-id=100001
+```
+
+### 6. 使用 Docker Compose 启动所有服务
+
+```bash
+docker-compose up --build
+```
+
+## ⚙️ 配置说明
+
+### Gate 服务配置 (gate-service/src/main/resources/application.yml)
+
+```yaml
+server:
+  port: 8080
+
+gate:
+  id: gate-01
+  host: 0.0.0.0
+  port: 8888
+  redis:
+    host: localhost
+    port: 6379
+    stream:
+      consumer-group: gate-01-cluster
+      block-ms: 5000
+      count: 100
+  player:
+    heartbeat-interval: 60
+    map-ttl: 300
+```
+
+### Game 服务配置 (game-service/src/main/resources/application.yml)
+
+```yaml
+server:
+  port: 8081
+
+game:
+  id: game-1001
+  redis:
+    host: localhost
+    port: 6379
+    stream:
+      consumer-group: game-1001-cluster
+```
+
+### Player 客户端配置 (player-client/src/main/resources/application.yml)
+
+```yaml
+player:
+  player-id: 100001
+  host: localhost
+  port: 8888
+  heartbeat-interval: 30
+```
+
+## 📊 API 说明
+
+### Game 服务 REST API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | /api/game/send/{playerId} | 发送测试消息给玩家 |
+| POST | /api/game/send/{playerId}/custom | 发送自定义消息 |
+| GET | /api/game/health | 健康检查 |
+
+### WebSocket 消息协议
+
+**客户端 → Gate (WebSocket)**
+
+```json
+// 认证
+{"type": "auth", "player_id": 100001}
+
+// 心跳
+{"type": "heartbeat", "player_id": 100001}
+
+// 游戏消息
+{"type": "game_msg", "player_id": 100001, "game_id": 1001, "msg_type": "battle.move", "seq": 123, "body": {...}}
+```
+
+**Gate → 客户端 (WebSocket)**
+
+```json
+// 认证响应
+{"type": "auth_ack", "player_id": 100001, "timestamp": 1234567890}
+
+// 心跳响应
+{"type": "heartbeat_ack", "player_id": 100001, "timestamp": 1234567890}
+
+// 游戏消息
+{"seq": 123, "msg_type": "battle.update", "body": {...}, "timestamp": 1234567890}
+```
+
+## 🔧 核心设计
 
 ### Player-Gate 映射表
 
@@ -113,135 +229,36 @@ XADD stream:up:game:1001 * gate_id gate-01 player_id 100001 msg_type battle.move
 XREADGROUP GROUP game-1001-cluster game-1001-instance-a STREAMS stream:up:game:1001 >
 ```
 
-## 🔧 配置说明
+## 🧪 测试
 
-### Gate 配置
-
-```yaml
-gate:
-  id: gate-01
-  host: 0.0.0.0
-  port: 8888
-  redis:
-    host: localhost
-    port: 6379
-    stream:
-      consumer_group: gate-01-cluster
-      block_ms: 5000
-      count: 100
-  player:
-    heartbeat_interval: 60
-    map_ttl: 300
-```
-
-### Game 配置
-
-```yaml
-game:
-  id: game-1001
-  redis:
-    host: localhost
-    port: 6379
-    stream:
-      consumer_group: game-1001-cluster
-```
-
-## 📈 测试场景
-
-### 测试套件
-
-GateDemo 包含完整的测试套件，覆盖以下场景：
-
-| 测试场景 | 说明 | 状态 |
-|----------|------|------|
-| 基础连接测试 | 验证玩家连接和 Player-Gate 映射 | ✅ |
-| 断线重连 - 原 Gate 可用 | 玩家断线后重连到同一 Gate | ✅ |
-| 断线重连 - 原 Gate 不可用 | Gate 宕机后玩家重连到新 Gate | ✅ |
-| 消息投递失败处理 | 验证 Gate→Player 投递失败后的处理 | ✅ |
-| 消息重复处理 | 验证重复消息的处理机制 | ✅ |
-| 多玩家并发测试 | 验证多玩家并发连接和消息 | ✅ |
-
-### 运行测试
+### 运行单元测试
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动 Redis
-docker-compose up -d redis
-
-# 启动 Gate 服务
-python gate/main.py &
-
-# 启动 Game 服务
-python game/main.py &
-
-# 运行完整测试
-bash run_tests.sh run
-
-# 快速测试
-bash run_tests.sh quick
-
-# 压力测试（100 并发）
-bash run_tests.sh stress 100
-
-# 查看测试报告
-bash run_tests.sh report
+mvn test
 ```
 
-### 测试报告示例
-
-```
-╔════════════════════════════════════════════════════════════╗
-║                    测试报告汇总                             ║
-╠════════════════════════════════════════════════════════════╣
-║  总计：  6  |  通过：  6  |  失败：  0  |  跳过：  0
-║  耗时：12.34 秒
-║  成功率：100.0%
-╚════════════════════════════════════════════════════════════╝
-```
-
-### 手动测试
-
-#### 1. 基础消息投递
+### 运行集成测试
 
 ```bash
-# 启动 Player 客户端
-cd player_client
-python client.py --player-id 100001 --gate-port 8888
-
-# 另一个终端：Game 发送测试消息
-python game/main.py --send-test --player-id 100001
+mvn verify
 ```
 
-#### 2. Gate 故障切换
+## 🎯 技术栈
 
-```bash
-# Player 连接 Gate-01
-python client.py --player-id 100001 --gate-port 8888
-
-# 停止 Gate-01 (Ctrl+C)
-
-# Player 重连 Gate-02
-python client.py --player-id 100001 --gate-port 8889
-
-# Game 发送消息，验证消息投递到新 Gate
-```
-
-## 🎯 关键特性
-
-| 特性 | 实现方式 |
-|------|----------|
-| 无状态 Gate | 消息持久化在 Redis，Gate 不持有状态 |
-| 消息可靠 | Redis Stream + ACK 机制 |
-| 玩家重连 | Player-Gate 映射表 + Stream Pending |
-| 水平扩展 | Consumer Group 负载均衡 |
+| 组件 | 技术 |
+|------|------|
+| 框架 | Spring Boot 3.2 |
+| WebSocket | Spring WebSocket |
+| Redis | Lettuce (Reactive) |
+| 构建 | Maven |
+| Java | JDK 17+ |
 
 ## 📝 注意事项
 
 1. **Redis 要求**: Redis 6.0+（支持 Stream Consumer Group）
-2. **网络要求**: Gate/Game/Redis 之间需要低延迟网络
-3. **生产建议**: Redis 集群部署，开启持久化
+2. **Java 版本**: JDK 17+
+3. **网络要求**: Gate/Game/Redis 之间需要低延迟网络
+4. **生产建议**: Redis 集群部署，开启持久化
 
 ## 🔗 相关文档
 
@@ -250,4 +267,5 @@ python client.py --player-id 100001 --gate-port 8889
 ---
 
 **License**: MIT  
-**Author**: clawAI
+**Author**: clawAI  
+**Version**: 1.0.0 (Java Implementation)

@@ -1,0 +1,18 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: game-service
+
+game:
+  id: ${GAME_ID:game-1001}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    stream:
+      consumer-group: ${GAME_ID:game-1001}-cluster
+
+logging:
+  level:
+    com.clawai.gatedemo: DEBUG
