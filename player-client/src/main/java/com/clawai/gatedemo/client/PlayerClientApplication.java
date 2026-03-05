@@ -20,7 +20,14 @@ public class PlayerClientApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // 启动客户端
-        clientService.connect();
+        // 启动客户端（异步连接，不阻塞启动）
+        new Thread(() -> {
+            try {
+                clientService.connect();
+            } catch (Exception e) {
+                System.err.println("无法连接到 Gate 服务：" + e.getMessage());
+                System.err.println("请确保 Gate 服务已启动：cd gate-service && mvn spring-boot:run");
+            }
+        }).start();
     }
 }

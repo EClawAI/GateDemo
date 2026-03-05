@@ -32,40 +32,37 @@ public class PlayerClientService {
     }
 
     public void connect() {
-        latch = new CountDownLatch(1);
-        
         String url = String.format("ws://%s:%d/ws", playerConfig.getHost(), playerConfig.getPort());
         logger.info("Connecting to Gate at {}", url);
 
-        webSocketClient.execute(URI.create(url), session -> {
-            currentSession = session;
-            latch.countDown();
-            
-            // 发送认证消息
-            authenticate(session);
-            
-            // 启动心跳
-            startHeartbeat(session);
-            
-            // 接收消息
-            return session.receive()
-                .doOnNext(message -> {
-                    String payload = message.getPayloadAsText();
-                    logger.info("Received: {}", payload);
-                    handleMessage(payload);
-                })
-                .then();
-        }).block(Duration.ofSeconds(10));
-
-        // 等待连接
         try {
-            latch.await();
-            logger.info("Connected successfully!");
+            latch = new CountDownLatch(1);
             
-            // 启动命令行交互
-            startConsole();
-        } catch (InterruptedException e) {
+            webSocketClient.execute(URI.create(url), session -> {
+                currentSession = session;
+                latch.countDown();
+                
+                authenticate(session);
+                startHeartbeat(session);
+                
+                return session.receive()
+                    .doOnNext(message -> {
+                        String payload = message.getPayloadAsText();
+                        logger.info("Received: {}", payload);
+                        handleMessage(payload);
+                    })
+                    .then();
+            }).block(Duration.ofSeconds(5));
+
+            if (latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                logger.info("Connected successfully!");
+                startConsole();
+            } else {
+                logger.warn("Connection timeout - Gate service may not be running");
+            }
+        } catch (Exception e) {
             logger.error("Connection failed: {}", e.getMessage());
+            logger.info("Hint: Start Gate service first: cd gate-service && mvn spring-boot:run");
         }
     }
 
