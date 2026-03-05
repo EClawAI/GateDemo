@@ -1,9 +1,10 @@
 com/clawai/gatedemo/gate/config/GateConfig$Player.class
 com/clawai/gatedemo/gate/config/GateConfig$Game.class
+com/clawai/gatedemo/gate/handler/GateNettyWebSocketHandler.class
 com/clawai/gatedemo/gate/config/GateConfig.class
-com/clawai/gatedemo/gate/config/WebSocketConfig.class
+com/clawai/gatedemo/gate/config/NettyWebSocketServerConfig$1.class
 com/clawai/gatedemo/gate/service/PlayerService.class
+com/clawai/gatedemo/gate/config/NettyWebSocketServerConfig.class
 com/clawai/gatedemo/gate/config/HttpClientConfig.class
 com/clawai/gatedemo/gate/model/PlayerMessage.class
 com/clawai/gatedemo/gate/GateServiceApplication.class
-com/clawai/gatedemo/gate/handler/GateWebSocketHandler.class

@@ -25,9 +25,12 @@ public class GateConfig {
 
     public static class Player {
         private int heartbeatInterval = 60;
+        private int mapTtl = 300;
 
         public int getHeartbeatInterval() { return heartbeatInterval; }
         public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
+        public int getMapTtl() { return mapTtl; }
+        public void setMapTtl(int mapTtl) { this.mapTtl = mapTtl; }
     }
 
     public String getId() { return id; }

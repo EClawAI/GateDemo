@@ -161,7 +161,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         ctx.channel().attr(PlayerService.PLAYER_ID_KEY).set(playerId);
 
         // 4. 注册玩家
-        playerService.registerPlayer(playerId, ctx);
+        playerService.registerPlayer(playerId, ctx.channel());
         logger.info("✅ 玩家 {} 认证成功", playerId);
 
         // 5. 发送认证成功响应

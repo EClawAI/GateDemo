@@ -120,7 +120,7 @@ public class NettyWebSocketServerConfig {
         // 2. 创建 Worker 线程组（处理 IO）
         // 不指定线程数时，默认为 CPU 核心数 * 2
         workerGroup = new NioEventLoopGroup();
-        logger.info("Worker 线程组已创建，线程数：{}", workerGroup.executorCount());
+        logger.info("Worker 线程组已创建");
 
         try {
             // 3. 创建服务器引导类
