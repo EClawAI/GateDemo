@@ -1,7 +1,0 @@
-com/clawai/gatedemo/client/PlayerClientRunner$1.class
-com/clawai/gatedemo/client/PlayerClientApplication.class
-com/clawai/gatedemo/client/config/PlayerConfig.class
-com/clawai/gatedemo/client/PlayerClientRunner.class
-com/clawai/gatedemo/client/service/PlayerClientService.class
-com/clawai/gatedemo/client/config/PlayerClientConfig.class
-com/clawai/gatedemo/client/handler/PlayerNettyHandler.class
