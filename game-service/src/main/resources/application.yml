@@ -1,16 +1,12 @@
-server:
-  port: 8081
-
 spring:
   application:
     name: game-service
 
+# Game 服务配置
 game:
   id: ${GAME_ID:1001}  # Game ID（数字），从启动参数读取
-  cache:
-    max-size: 10000
-    expire-minutes: 30
 
+# gRPC 服务配置
 grpc:
   port: ${GRPC_PORT:9090}  # gRPC 服务监听端口，从启动参数读取
 
