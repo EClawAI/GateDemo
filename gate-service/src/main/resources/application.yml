@@ -10,16 +10,17 @@ gate:
   host: ${GATE_HOST:0.0.0.0}
   port: ${GATE_PORT:8888}
   # Game 服务列表（支持多实例）
+  # 只配置实际运行的 Game 服务，未运行的请注释掉
   games:
     - id: 1001
       host: ${GAME_1001_HOST:localhost}
       port: ${GAME_1001_PORT:9091}
-    - id: 1002
-      host: ${GAME_1002_HOST:localhost}
-      port: ${GAME_1002_PORT:9092}
-    - id: 1003
-      host: ${GAME_1003_HOST:localhost}
-      port: ${GAME_1003_PORT:9093}
+    # - id: 1002  # 暂不启动
+    #   host: ${GAME_1002_HOST:localhost}
+    #   port: ${GAME_1002_PORT:9092}
+    # - id: 1003  # 暂不启动
+    #   host: ${GAME_1003_HOST:localhost}
+    #   port: ${GAME_1003_PORT:9093}
   player:
     heartbeat-interval: 60
 
