@@ -10,61 +10,151 @@ import org.slf4j.LoggerFactory;
 
 import java.util.zip.Deflater;
 
+/**
+ * 游戏消息编码器 - 将Java对象转换为二进制数据用于网络传输
+ *
+ * Netty职责：
+ * - 继承MessageToByteEncoder，自动拦截write操作
+ * - 当上层写入WrappedMessage时，自动调用encode方法
+ * - 将编码后的字节写入Channel
+ *
+ * 编码流程：
+ * 1. 提取消息头和消息体
+ * 2. 判断是否需要压缩（body > 64字节）
+ * 3. 压缩消息体（可选）
+ * 4. 写入消息头（14字节）
+ * 5. 写入消息体
+ *
+ * 二进制协议格式：
+ * |  2字节  |  2字节  |  2字节  |   4字节   |   4字节   |   N字节    |
+ * |  flags  | sequence | messageId | bodyLength | requestId | bodyBytes  |
+ *
+ * 压缩策略：
+ * - 仅当消息体大于64字节时才压缩
+ * - 压缩后如果体积没有减小，则放弃压缩
+ * - 使用Java内置的Deflater（DEFLATE算法）
+ *
+ * 设计考量：
+ * - 为什么不自动压缩所有消息？
+ *   压缩有CPU开销，小消息压缩后可能反而更大
+ * - 为什么选择DEFLATE而非gzip？
+ *   DEFLATE是gzip的核心算法，更轻量
+ * - ByteBuf直接写入的优点？
+ *   减少中间字节数组创建，Netty推荐写法
+ */
 public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
 
+    /** 日志记录器，用于调试和问题排查 */
     private static final Logger logger = LoggerFactory.getLogger(GameMessageEncoder.class);
 
+    /** 压缩阈值：大于此字节数才进行压缩 */
+    private static final int COMPRESS_THRESHOLD = 64;
+
+    /**
+     * 核心编码方法
+     *
+     * Netty调用时机：
+     * - 当ChannelPipeline中有Handler写入WrappedMessage时
+     * - Netty会自动调用此方法进行编码
+     *
+     * @param ctx Netty通道上下文，用于获取通道信息
+     * @param msg 要编码的消息对象
+     * @param out 输出的ByteBuf，编码后的数据写入此缓冲区
+     */
     @Override
     protected void encode(ChannelHandlerContext ctx, WrappedMessage msg, ByteBuf out) throws Exception {
+        // 参数校验：消息或消息头为空则跳过
         if (msg == null || msg.getHeader() == null) {
             return;
         }
 
+        // 步骤1: 提取消息头和消息体
         MessageHeader header = msg.getHeader();
+        // 将消息体序列化为字节数组
         byte[] bodyBytes = msg.getBody() != null ? msg.getBody().toBytes() : new byte[0];
 
-        boolean needCompress = header.isCompressed() && bodyBytes.length > 64;
+        // 步骤2: 判断是否需要压缩
+        // 压缩条件：消息头标记为压缩 且 消息体大于阈值
+        boolean needCompress = header.isCompressed() && bodyBytes.length > COMPRESS_THRESHOLD;
         byte[] finalBodyBytes = bodyBytes;
 
+        // 步骤3: 执行压缩（如果需要）
         if (needCompress) {
             finalBodyBytes = compress(bodyBytes);
+            // 如果压缩失败或压缩后更大，则不压缩
             if (finalBodyBytes == null || finalBodyBytes.length >= bodyBytes.length) {
                 finalBodyBytes = bodyBytes;
                 needCompress = false;
             }
         }
 
+        // 步骤4: 更新消息头中的压缩标志和长度
+        // 注意：必须在写入前更新，因为bodyLength需要反映实际传输的长度
         header.setBodyLength(finalBodyBytes.length);
         header.setCompressed(needCompress);
 
-        out.writeShort(header.getFlags());
-        out.writeShort(header.getSequence());
-        out.writeShort(header.getMessageId());
-        out.writeInt(header.getBodyLength());
-        out.writeInt(header.getRequestId());
+        // 步骤5: 写入消息头（固定14字节）
+        // 写入顺序必须与解码器一致
+        out.writeShort(header.getFlags());      // 2字节：标志位
+        out.writeShort(header.getSequence());   // 2字节：序列号
+        out.writeShort(header.getMessageId());  // 2字节：消息ID
+        out.writeInt(header.getBodyLength());   // 4字节：消息体长度
+        out.writeInt(header.getRequestId());    // 4字节：请求ID
 
+        // 步骤6: 写入消息体
         if (finalBodyBytes.length > 0) {
             out.writeBytes(finalBodyBytes);
         }
 
+        // 调试日志：记录编码结果
         logger.debug("Encoded message: msgId={}, bodyLength={}, compressed={}",
                 header.getMessageId(), header.getBodyLength(), needCompress);
     }
 
+    /**
+     * 使用DEFLATE算法压缩数据
+     *
+     * DEFLATE算法：
+     * - 无损压缩算法，结合LZ77和Huffman编码
+     * - Java标准库java.util.zip.Deflater实现
+     * - 压缩比约为原始数据的50-70%
+     *
+     * 实现细节：
+     * 1. 创建Deflater实例
+     * 2. 输入原始数据
+     * 3. finish()表示数据输入完成
+     * 4. deflate()执行压缩
+     * 5. 释放资源end()
+     *
+     * 为什么不使用GZIPOutputStream？
+     * - GZIP在DEFLATE基础上加了GZIP头尾，额外2-18字节
+     * - 游戏协议追求简洁，不需要GZIP的兼容性
+     *
+     * @param data 要压缩的原始数据
+     * @return 压缩后的数据，如果压缩失败或未压缩则返回null
+     */
     private byte[] compress(byte[] data) {
+        // 创建DEFLATE压缩器
         Deflater deflater = new Deflater();
         deflater.setInput(data);
         deflater.finish();
 
+        // 预分配输出缓冲区（最大为原始大小）
         byte[] compressed = new byte[data.length];
+        // 执行压缩，返回实际压缩后的大小
         int compressedLength = deflater.deflate(compressed);
+        // 释放压缩器资源
         deflater.end();
 
+        // 如果压缩成功且体积减小
         if (compressedLength < data.length) {
+            // 创建正确大小的数组返回
             byte[] result = new byte[compressedLength];
             System.arraycopy(compressed, 0, result, 0, compressedLength);
             return result;
         }
+
+        // 压缩失败或未压缩
         return null;
     }
 }
