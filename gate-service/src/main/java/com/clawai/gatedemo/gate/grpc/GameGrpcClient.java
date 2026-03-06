@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.gate.grpc;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.grpc.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;

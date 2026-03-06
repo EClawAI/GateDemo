@@ -253,7 +253,7 @@ public class PlayerService {
                 playerId,
                 gameId,
                 message.getMsgType() != null ? message.getMsgType() : "unknown",
-                message.getSeq() != null ? message.getSeq() : 0,
+                message.getSeq() != null ? message.getSeq().intValue() : 0,
                 message.getBody() != null ? message.getBody() : Map.of()
             );
             
