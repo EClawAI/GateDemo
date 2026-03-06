@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - gatedemo
+    volumes:
+      - redis-data:/data
+
   gate-01:
     build:
       context: ./gate-service
@@ -12,9 +21,13 @@ services:
       - GATE_PORT=8888
       - GAME_HOST=game-1001
       - GAME_PORT=8081
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       game-1001:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - gatedemo
 
@@ -29,9 +42,13 @@ services:
       - GATE_PORT=8888
       - GAME_HOST=game-1001
       - GAME_PORT=8081
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       game-1001:
         condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - gatedemo
 
@@ -67,3 +84,6 @@ services:
 networks:
   gatedemo:
     driver: bridge
+
+volumes:
+  redis-data:

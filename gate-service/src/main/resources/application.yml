@@ -9,6 +9,10 @@ gate:
   id: ${GATE_ID:gate-01}
   host: ${GATE_HOST:0.0.0.0}
   port: ${GATE_PORT:8888}
+  # Redis配置
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
   # Game 服务列表（支持多实例）
   # 只配置实际运行的 Game 服务，未运行的请注释掉
   games:
@@ -23,6 +27,10 @@ gate:
     #   port: ${GAME_1003_PORT:9093}
   player:
     heartbeat-interval: 60
+
+offline-message:
+  threshold: 200
+  enabled: true
 
 logging:
   level:

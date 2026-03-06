@@ -76,6 +76,12 @@ public class PlayerService {
     private final GameGrpcClientPool gameGrpcClientPool;
 
     /**
+     * 离线消息服务
+     * 玩家离线时处理离线消息
+     */
+    private final OfflineMessageService offlineMessageService;
+
+    /**
      * 玩家连接映射表（内存存储）
      * Key: player_id（玩家 ID）
      * Value: Channel（Netty 连接通道）
@@ -92,10 +98,13 @@ public class PlayerService {
     /**
      * 构造函数
      */
-    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, GameGrpcClientPool gameGrpcClientPool) {
+    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, 
+                       GameGrpcClientPool gameGrpcClientPool, 
+                       OfflineMessageService offlineMessageService) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
         this.gameGrpcClientPool = gameGrpcClientPool;
+        this.offlineMessageService = offlineMessageService;
     }
 
     /**
@@ -108,7 +117,8 @@ public class PlayerService {
      * 2. 存入本地内存映射表
      * 
      * 注意：
-     * - 不写入 Redis（无 Redis 版本）
+     * - 玩家在线状态存储在内存中
+     * - Redis用于离线消息队列，不存储在线状态
      * - 重启后数据丢失
      * 
      * @param playerId 玩家 ID
@@ -129,13 +139,19 @@ public class PlayerService {
      * 1. 从本地映射表移除
      * 
      * 注意：
-     * - 不操作 Redis（无 Redis 版本）
+     * - 离线消息通过OfflineMessageService处理
      * 
      * @param playerId 玩家 ID
      */
     public void unregisterPlayer(Long playerId) {
         // 从本地映射表移除
         players.remove(playerId);
+        
+        // 通知离线消息服务
+        if (offlineMessageService != null) {
+            offlineMessageService.onPlayerOffline(playerId);
+        }
+        
         logger.info("🗑️ 玩家 {} 已注销 (当前在线：{})", playerId, players.size());
     }
 
@@ -162,8 +178,8 @@ public class PlayerService {
     /**
      * 续期心跳
      * 
-     * 无 Redis 版本中，心跳仅用于检测连接状态
-     * 不需要刷新 Redis TTL
+     * 心跳仅用于检测连接状态
+     * 玩家在线状态存储在内存中
      * 
      * @param playerId 玩家 ID
      */
