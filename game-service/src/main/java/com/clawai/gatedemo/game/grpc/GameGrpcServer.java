@@ -5,12 +5,8 @@ import com.clawai.gatedemo.grpc.*;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -44,7 +40,12 @@ public class GameGrpcServer {
 
     private static final Logger logger = LoggerFactory.getLogger(GameGrpcServer.class);
 
-    private static final int PORT = 9090;
+    /**
+     * gRPC 服务端口，从配置文件读取
+     * 默认值：9090
+     */
+    @Value("${grpc.port:9090}")
+    private int grpcPort;
 
     private io.grpc.Server server;
     private final GameMessageHandler gameMessageHandler;
@@ -64,17 +65,17 @@ public class GameGrpcServer {
     @PostConstruct
     public void start() throws IOException {
         logger.info("=== 启动 Game gRPC 服务器 ===");
-        logger.info("监听端口：{}", PORT);
+        logger.info("监听端口：{}", grpcPort);
 
         // 创建 gRPC 服务器
-        server = io.grpc.ServerBuilder.forPort(PORT)
+        server = io.grpc.ServerBuilder.forPort(grpcPort)
             .addService(new GameServiceImpl())
             .build()
             .start();
 
         logger.info("===========================================");
         logger.info("✅ Game gRPC 服务器启动成功！");
-        logger.info("监听地址：0.0.0.0:{}", PORT);
+        logger.info("监听地址：0.0.0.0:{}", grpcPort);
         logger.info("===========================================");
 
         // 添加关闭钩子

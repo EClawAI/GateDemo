@@ -11,6 +11,9 @@ game:
     max-size: 10000
     expire-minutes: 30
 
+grpc:
+  port: 9090  # gRPC 服务监听端口
+
 logging:
   level:
     com.clawai.gatedemo: DEBUG

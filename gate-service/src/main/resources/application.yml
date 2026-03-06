@@ -11,7 +11,7 @@ gate:
   port: ${GATE_PORT:8888}
   game:
     host: ${GAME_HOST:localhost}
-    port: ${GAME_PORT:8081}
+    port: ${GAME_GRPC_PORT:9090}  # gRPC 端口
   player:
     heartbeat-interval: 60
 
