@@ -1,4 +1,4 @@
-package com.clawai.gatedemo.gate.config;
+package com.clawai.gatedemo.gate.ws;
 
 import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
 import io.netty.bootstrap.ServerBootstrap;
@@ -17,60 +17,39 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Netty WebSocket 服务器配置（纯 Netty 实现）
- * 
- * 功能说明：
- * 1. 使用 Netty 创建独立的 WebSocket 服务器
- * 2. 监听独立端口（默认 8888）
- * 3. 支持 WebSocket 协议升级（HTTP → WebSocket）
- * 4. 处理玩家连接、消息收发、心跳检测
- * 
- * 架构说明：
- * ┌─────────────────────────────────────────────────┐
- * │           Netty WebSocket Server                │
- * │                                                 │
- * │  Boss Group (1 个线程)                           │
- * │    ↓ 接受连接                                    │
- * │  Worker Group (多个线程)                         │
- * │    ↓ 处理 IO                                     │
- * │  ChannelPipeline                                 │
- * │    ├─ HttpServerCodec        - HTTP 编解码器     │
- * │    ├─ HttpObjectAggregator   - HTTP 消息聚合     │
- * │    ├─ ChunkedWriteHandler    - 大数据流写入      │
- * │    ├─ WebSocketServerProtocolHandler - WS 协议   │
- * │    └─ GateNettyWebSocketHandler - 业务处理       │
- * └─────────────────────────────────────────────────┘
- * 
- * @author clawAI
- * @since 2026-03-05
+ * Netty WebSocket 服务器 - 负责启动和管理WebSocket服务
+ *
+ * 职责：
+ * 1. 启动Netty服务器，监听WebSocket端口
+ * 2. 配置ChannelPipeline
+ * 3. 管理Boss和Worker线程组
+ *
+ * 与NettyWebSocketServerConfig的关系：
+ * - NettyWebSocketServer：纯服务类，只管启动/停止
+ * - NettyWebSocketServerConfig：Spring配置类，注入依赖并调用服务
+ *
+ * 设计原则：
+ * - 单一职责：服务器生命周期由专门类管理
+ * - 依赖注入：Handler通过构造函数注入，便于测试
+ * - 优雅关闭：确保资源正确释放
  */
 public class NettyWebSocketServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyWebSocketServer.class);
 
-    /**
-     * WebSocket 服务器端口
-     */
+    /** WebSocket 服务器端口 */
     private final int webSocketPort;
 
-    /**
-     * 玩家连接处理器
-     */
+    /** 玩家连接处理器 */
     private final GateNettyWebSocketHandler gateWebSocketHandler;
 
-    /**
-     * Boss 线程组 - 负责接受客户端连接
-     */
+    /** Boss 线程组 - 负责接受客户端连接 */
     private EventLoopGroup bossGroup;
 
-    /**
-     * Worker 线程组 - 负责处理 IO 读写
-     */
+    /** Worker 线程组 - 负责处理 IO 读写 */
     private EventLoopGroup workerGroup;
 
-    /**
-     * Netty 服务器 Channel
-     */
+    /** Netty 服务器 Channel */
     private Channel serverChannel;
 
     /**
