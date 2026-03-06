@@ -38,7 +38,8 @@ public class MessageQueueConsumer {
             redisTemplate.opsForStream().createGroup(STREAM_KEY, ReadOffset.from("0"), GROUP_NAME);
             logger.info("Created consumer group: {}", GROUP_NAME);
         } catch (Exception e) {
-            logger.warn("Consumer group already exists or stream not ready: {}", e.getMessage());
+            logger.warn("Redis stream not available, offline message queue disabled: {}", e.getMessage());
+            return;
         }
 
         String consumerName = CONSUMER_NAME + UUID.randomUUID().toString().substring(0, 8);

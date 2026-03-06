@@ -13,6 +13,7 @@ gate:
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:redistest}
   # Game 服务列表（支持多实例）
   # 只配置实际运行的 Game 服务，未运行的请注释掉
   games:
