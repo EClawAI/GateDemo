@@ -1,7 +1,7 @@
 package com.clawai.gatedemo.gate.service;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
-import com.clawai.gatedemo.gate.grpc.GameGrpcClient;
+import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,10 +70,10 @@ public class PlayerService {
     private final GateConfig gateConfig;
 
     /**
-     * gRPC 客户端（用于调用 Game 服务）
-     * 使用长连接，避免每次 HTTP 握手开销
+     * gRPC 客户端连接池（用于调用 Game 服务）
+     * 维护多个 Game 服务的长连接，根据 gameId 路由
      */
-    private final GameGrpcClient gameGrpcClient;
+    private final GameGrpcClientPool gameGrpcClientPool;
 
     /**
      * 玩家连接映射表（内存存储）
@@ -92,10 +92,10 @@ public class PlayerService {
     /**
      * 构造函数
      */
-    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, GameGrpcClient gameGrpcClient) {
+    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, GameGrpcClientPool gameGrpcClientPool) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
-        this.gameGrpcClient = gameGrpcClient;
+        this.gameGrpcClientPool = gameGrpcClientPool;
     }
 
     /**
@@ -232,13 +232,15 @@ public class PlayerService {
      * 转发玩家消息到 Game 服务（gRPC 方式）
      * 
      * 功能：
-     * 1. 使用 gRPC 长连接发送消息
-     * 2. Protobuf 序列化，高效传输
-     * 3. Game 服务处理游戏逻辑
+     * 1. 根据 gameId 路由到对应的 Game 服务
+     * 2. 使用 gRPC 长连接发送消息
+     * 3. Protobuf 序列化，高效传输
+     * 4. Game 服务处理游戏逻辑
      * 
      * 与 HTTP 版本的区别：
      * - ✅ gRPC 长连接，避免每次握手开销
      * - ✅ Protobuf 序列化，比 JSON 更小更快
+     * - ✅ 支持多 Game 服务实例
      * - ✅ 异步调用，不阻塞 Netty IO 线程
      * 
      * @param playerId 玩家 ID
@@ -246,12 +248,17 @@ public class PlayerService {
      * @param message 消息对象
      */
     public void forwardToGame(Long playerId, Integer gameId, PlayerMessage message) {
+        if (gameId == null) {
+            logger.warn("⚠️ 消息缺少 gameId，无法转发");
+            return;
+        }
+        
         // 异步转发，不阻塞 Netty IO 线程
         CompletableFuture.runAsync(() -> {
-            // 使用 gRPC 发送消息
-            boolean success = gameGrpcClient.sendGameMessage(
-                playerId,
+            // 根据 gameId 使用连接池发送消息
+            boolean success = gameGrpcClientPool.sendGameMessage(
                 gameId,
+                playerId,
                 message.getMsgType() != null ? message.getMsgType() : "unknown",
                 message.getSeq() != null ? message.getSeq().intValue() : 0,
                 message.getBody() != null ? message.getBody() : Map.of()

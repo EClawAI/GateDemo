@@ -41,6 +41,13 @@ public class GameGrpcServer {
     private static final Logger logger = LoggerFactory.getLogger(GameGrpcServer.class);
 
     /**
+     * Game 服务 ID，从配置文件读取
+     * 默认值：1001
+     */
+    @Value("${game.id:1001}")
+    private int gameId;
+
+    /**
      * gRPC 服务端口，从配置文件读取
      * 默认值：9090
      */
@@ -65,6 +72,7 @@ public class GameGrpcServer {
     @PostConstruct
     public void start() throws IOException {
         logger.info("=== 启动 Game gRPC 服务器 ===");
+        logger.info("Game ID: {}", gameId);
         logger.info("监听端口：{}", grpcPort);
 
         // 创建 gRPC 服务器
@@ -75,6 +83,7 @@ public class GameGrpcServer {
 
         logger.info("===========================================");
         logger.info("✅ Game gRPC 服务器启动成功！");
+        logger.info("Game ID: {}", gameId);
         logger.info("监听地址：0.0.0.0:{}", grpcPort);
         logger.info("===========================================");
 

@@ -3,6 +3,9 @@ package com.clawai.gatedemo.gate.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Gate 服务配置类
  * 
@@ -13,12 +16,14 @@ import org.springframework.context.annotation.Configuration;
  * - gate.id: 网关 ID（如：gate-01）
  * - gate.host: 监听地址（默认：0.0.0.0）
  * - gate.port: WebSocket 端口（默认：8888）
- * - gate.game.host: Game 服务地址（默认：localhost）
- * - gate.game.port: Game 服务端口（默认：8081）
+ * - gate.games: Game 服务列表（支持多实例）
+ *   - id: Game ID
+ *   - host: Game 服务地址
+ *   - port: gRPC 端口（默认 9090）
  * - gate.player.heartbeat-interval: 心跳间隔（秒）
  * 
  * @author clawAI
- * @since 2026-03-05
+ * @since 2026-03-06
  */
 @Configuration
 @ConfigurationProperties(prefix = "gate")
@@ -43,9 +48,18 @@ public class GateConfig {
     private int port = 8888;
 
     /**
-     * Game 服务配置
+     * Game 服务列表（支持多实例）
+     * 配置示例：
+     * gate:
+     *   games:
+     *     - id: 1001
+     *       host: localhost
+     *       port: 9091
+     *     - id: 1002
+     *       host: localhost
+     *       port: 9092
      */
-    private Game game = new Game();
+    private List<GameInstance> games = new ArrayList<>();
 
     /**
      * 玩家配置
@@ -53,12 +67,15 @@ public class GateConfig {
     private Player player = new Player();
 
     /**
-     * Game 服务配置类
+     * Game 服务实例配置
      */
-    public static class Game {
+    public static class GameInstance {
+        private int id;
         private String host = "localhost";
-        private int port = 8081;
+        private int port = 9090;
 
+        public int getId() { return id; }
+        public void setId(int id) { this.id = id; }
         public String getHost() { return host; }
         public void setHost(String host) { this.host = host; }
         public int getPort() { return port; }
@@ -87,8 +104,8 @@ public class GateConfig {
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
     public void setPort(int port) { this.port = port; }
-    public Game getGame() { return game; }
-    public void setGame(Game game) { this.game = game; }
+    public List<GameInstance> getGames() { return games; }
+    public void setGames(List<GameInstance> games) { this.games = games; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player player) { this.player = player; }
 }

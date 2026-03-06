@@ -9,9 +9,17 @@ gate:
   id: ${GATE_ID:gate-01}
   host: ${GATE_HOST:0.0.0.0}
   port: ${GATE_PORT:8888}
-  game:
-    host: ${GAME_HOST:localhost}
-    port: ${GAME_GRPC_PORT:9090}  # gRPC 端口
+  # Game 服务列表（支持多实例）
+  games:
+    - id: 1001
+      host: ${GAME_1001_HOST:localhost}
+      port: ${GAME_1001_PORT:9091}
+    - id: 1002
+      host: ${GAME_1002_HOST:localhost}
+      port: ${GAME_1002_PORT:9092}
+    - id: 1003
+      host: ${GAME_1003_HOST:localhost}
+      port: ${GAME_1003_PORT:9093}
   player:
     heartbeat-interval: 60
 

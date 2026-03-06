@@ -1,0 +1,299 @@
+package com.clawai.gatedemo.gate.grpc;
+
+import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.grpc.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Game gRPC 客户端连接池
+ * 
+ * 功能说明：
+ * 1. 维护多个 Game 服务的 gRPC 长连接
+ * 2. 根据 gameId 路由到对应的 Game 服务
+ * 3. 支持动态添加/移除 Game 服务实例
+ * 
+ * 架构说明：
+ * ┌─────────────────────────────────────────┐
+ * │         GameGrpcClientPool              │
+ * │                                         │
+ * │  Map<gameId, GrpcConnection>            │
+ * │    ├─ 1001 → Channel → Game-1          │
+ * │    ├─ 1002 → Channel → Game-2          │
+ * │    └─ 1003 → Channel → Game-3          │
+ * └─────────────────────────────────────────┘
+ * 
+ * 配置示例（application.yml）：
+ * gate:
+ *   games:
+ *     - id: 1001
+ *       host: localhost
+ *       port: 9091
+ *     - id: 1002
+ *       host: localhost
+ *       port: 9092
+ * 
+ * @author clawAI
+ * @since 2026-03-06
+ */
+@Component
+public class GameGrpcClientPool {
+
+    private static final Logger logger = LoggerFactory.getLogger(GameGrpcClientPool.class);
+
+    private final GateConfig gateConfig;
+    private final ObjectMapper objectMapper;
+    
+    /**
+     * 连接池
+     * Key: gameId
+     * Value: GrpcConnection（包含 Channel 和 Stub）
+     */
+    private final Map<Integer, GrpcConnection> connectionPool = new ConcurrentHashMap<>();
+    
+    /**
+     * gRPC 连接封装
+     */
+    private static class GrpcConnection {
+        final int gameId;
+        final String host;
+        final int port;
+        final ManagedChannel channel;
+        final GameServiceGrpc.GameServiceBlockingStub blockingStub;
+        final GameServiceGrpc.GameServiceStub asyncStub;
+        StreamObserver<HeartbeatRequest> heartbeatObserver;
+        
+        GrpcConnection(int gameId, String host, int port, ManagedChannel channel) {
+            this.gameId = gameId;
+            this.host = host;
+            this.port = port;
+            this.channel = channel;
+            this.blockingStub = GameServiceGrpc.newBlockingStub(channel);
+            this.asyncStub = GameServiceGrpc.newStub(channel);
+        }
+    }
+    
+    /**
+     * 构造函数
+     */
+    public GameGrpcClientPool(GateConfig gateConfig, ObjectMapper objectMapper) {
+        this.gateConfig = gateConfig;
+        this.objectMapper = objectMapper;
+    }
+    
+    /**
+     * 初始化连接池
+     * 从配置中读取所有 Game 服务信息并建立连接
+     */
+    @PostConstruct
+    public void init() {
+        logger.info("=== 初始化 gRPC 连接池 ===");
+        
+        // 从配置中读取 Game 服务列表
+        for (GateConfig.GameInstance game : gateConfig.getGames()) {
+            addConnection(game.getId(), game.getHost(), game.getPort());
+        }
+        
+        logger.info("✅ gRPC 连接池初始化完成，连接数：{}", connectionPool.size());
+    }
+    
+    /**
+     * 添加 Game 服务连接
+     * 
+     * @param gameId 游戏 ID
+     * @param host 主机地址
+     * @param port gRPC 端口
+     */
+    public void addConnection(int gameId, String host, int port) {
+        if (connectionPool.containsKey(gameId)) {
+            logger.warn("⚠️ Game {} 已存在连接，跳过", gameId);
+            return;
+        }
+        
+        logger.info("🔗 创建 Game {} 连接：{}:{}", gameId, host, port);
+        
+        // 创建 gRPC 通道（长连接）
+        ManagedChannel channel = ManagedChannelBuilder
+            .forAddress(host, port)
+            .usePlaintext()
+            .keepAliveTime(30, TimeUnit.SECONDS)
+            .keepAliveTimeout(10, TimeUnit.SECONDS)
+            .keepAliveWithoutCalls(true)
+            .build();
+        
+        // 创建连接对象
+        GrpcConnection conn = new GrpcConnection(gameId, host, port, channel);
+        connectionPool.put(gameId, conn);
+        
+        // 启动心跳
+        startHeartbeat(conn);
+        
+        logger.info("✅ Game {} 连接已建立", gameId);
+    }
+    
+    /**
+     * 移除 Game 服务连接
+     * 
+     * @param gameId 游戏 ID
+     */
+    public void removeConnection(int gameId) {
+        GrpcConnection conn = connectionPool.remove(gameId);
+        if (conn != null) {
+            logger.info("🔌 移除 Game {} 连接", gameId);
+            
+            // 完成心跳流
+            if (conn.heartbeatObserver != null) {
+                conn.heartbeatObserver.onCompleted();
+            }
+            
+            // 关闭通道
+            try {
+                conn.channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                conn.channel.shutdownNow();
+            }
+            
+            logger.info("✅ Game {} 连接已关闭", gameId);
+        }
+    }
+    
+    /**
+     * 根据 gameId 获取连接
+     * 
+     * @param gameId 游戏 ID
+     * @return gRPC 连接，不存在返回 null
+     */
+    private GrpcConnection getConnection(int gameId) {
+        return connectionPool.get(gameId);
+    }
+    
+    /**
+     * 发送游戏消息到指定 Game 服务
+     * 
+     * @param gameId 游戏 ID
+     * @param playerId 玩家 ID
+     * @param msgType 消息类型
+     * @param seq 消息序列号
+     * @param body 消息体（Java 对象）
+     * @return 是否发送成功
+     */
+    public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, Object body) {
+        GrpcConnection conn = getConnection(gameId);
+        
+        if (conn == null) {
+            logger.error("❌ Game {} 连接不存在，无法发送消息", gameId);
+            return false;
+        }
+        
+        try {
+            // 1. 将消息体转换为 JSON 字符串
+            String bodyJson = objectMapper.writeValueAsString(body);
+            
+            // 2. 构建 gRPC 消息
+            GameMessage message = GameMessage.newBuilder()
+                .setGateId(gateConfig.getId())
+                .setPlayerId(playerId)
+                .setGameId(gameId)
+                .setMsgType(msgType != null ? msgType : "unknown")
+                .setSeq(seq)
+                .setTimestamp(System.currentTimeMillis())
+                .setBody(bodyJson)
+                .build();
+            
+            // 3. 发送消息（同步调用）
+            GameResponse response = conn.blockingStub.sendGameMessage(message);
+            
+            if (response.getCode() == 0) {
+                logger.debug("📤 gRPC 消息发送成功：gameId={}, playerId={}", gameId, playerId);
+                return true;
+            } else {
+                logger.warn("⚠️ gRPC 消息发送失败：code={}, message={}", response.getCode(), response.getMessage());
+                return false;
+            }
+            
+        } catch (StatusRuntimeException e) {
+            logger.error("❌ gRPC 调用异常：gameId={}, {} - {}", gameId, e.getStatus(), e.getMessage());
+            return false;
+        } catch (Exception e) {
+            logger.error("❌ 发送游戏消息失败：gameId={}, {}", gameId, e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 启动心跳（双向流）
+     */
+    private void startHeartbeat(GrpcConnection conn) {
+        conn.heartbeatObserver = conn.asyncStub.heartbeat(new StreamObserver<HeartbeatResponse>() {
+            @Override
+            public void onNext(HeartbeatResponse response) {
+                logger.debug("💓 Game {} 心跳响应：code={}, serverTime={}", 
+                    conn.gameId, response.getCode(), response.getServerTime());
+            }
+            
+            @Override
+            public void onError(Throwable t) {
+                logger.error("❌ Game {} 心跳错误：{}", conn.gameId, t.getMessage());
+            }
+            
+            @Override
+            public void onCompleted() {
+                logger.info("🔚 Game {} 心跳流完成", conn.gameId);
+            }
+        });
+        
+        logger.debug("✅ Game {} 心跳已启动", conn.gameId);
+    }
+    
+    /**
+     * 发送心跳
+     */
+    public void sendHeartbeat(int gameId) {
+        GrpcConnection conn = getConnection(gameId);
+        if (conn != null && conn.heartbeatObserver != null) {
+            try {
+                HeartbeatRequest request = HeartbeatRequest.newBuilder()
+                    .setGateId(gateConfig.getId())
+                    .setTimestamp(System.currentTimeMillis())
+                    .build();
+                conn.heartbeatObserver.onNext(request);
+            } catch (Exception e) {
+                logger.warn("⚠️ 发送心跳失败：gameId={}, {}", gameId, e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 获取连接池大小
+     */
+    public int getPoolSize() {
+        return connectionPool.size();
+    }
+    
+    /**
+     * 关闭所有连接
+     */
+    @PreDestroy
+    public void shutdown() {
+        logger.info("=== 关闭 gRPC 连接池 ===");
+        
+        // 关闭所有连接
+        for (Integer gameId : connectionPool.keySet()) {
+            removeConnection(gameId);
+        }
+        
+        logger.info("✅ gRPC 连接池已关闭");
+    }
+}

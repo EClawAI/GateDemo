@@ -6,13 +6,13 @@ spring:
     name: game-service
 
 game:
-  id: ${GAME_ID:game-1001}
+  id: ${GAME_ID:1001}  # Game ID（数字），从启动参数读取
   cache:
     max-size: 10000
     expire-minutes: 30
 
 grpc:
-  port: 9090  # gRPC 服务监听端口
+  port: ${GRPC_PORT:9090}  # gRPC 服务监听端口，从启动参数读取
 
 logging:
   level:
