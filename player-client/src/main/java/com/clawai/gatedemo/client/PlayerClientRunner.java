@@ -31,7 +31,6 @@ import java.util.concurrent.TimeUnit;
  * @author clawAI
  * @since 2026-03-05
  */
-@Component
 public class PlayerClientRunner implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientRunner.class);

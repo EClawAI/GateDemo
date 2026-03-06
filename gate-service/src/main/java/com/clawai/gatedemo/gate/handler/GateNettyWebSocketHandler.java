@@ -3,6 +3,8 @@ package com.clawai.gatedemo.gate.handler;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
@@ -38,6 +40,7 @@ import java.util.Map;
  * @since 2026-03-05
  */
 @Component
+@ChannelHandler.Sharable
 public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
     private static final Logger logger = LoggerFactory.getLogger(GateNettyWebSocketHandler.class);
@@ -141,7 +144,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
      */
     private void handleAuth(ChannelHandlerContext ctx, PlayerMessage message) {
         Long playerId = message.getPlayerId();
-        
+
         // 1. 验证 player_id
         if (playerId == null || playerId <= 0) {
             logger.warn("❌ 认证失败：无效的 player_id from {}", ctx.channel().remoteAddress());
@@ -151,13 +154,20 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
 
         // 2. 检查是否重复登录
         if (playerService.hasPlayer(playerId)) {
-            logger.warn("⚠️ 玩家 {} 已登录，关闭新连接", playerId);
-            ctx.close();
-            return;
+            // 检查旧连接是否活跃
+            Channel oldChannel = playerService.getPlayerChannel(playerId);
+            if (oldChannel != null && oldChannel.isActive()) {
+                logger.warn("⚠️ 玩家 {} 已登录，关闭新连接", playerId);
+                ctx.close();
+                return;
+            } else {
+                // 旧连接不活跃，先注销
+                logger.info("🔄 玩家 {} 旧连接不活跃，注销并接受新连接", playerId);
+                playerService.unregisterPlayer(playerId);
+            }
         }
 
         // 3. 将 player_id 绑定到 Channel
-        // 使用 Channel 的 attr 存储 player_id，方便后续获取
         ctx.channel().attr(PlayerService.PLAYER_ID_KEY).set(playerId);
 
         // 4. 注册玩家
@@ -165,7 +175,6 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         logger.info("✅ 玩家 {} 认证成功", playerId);
 
         // 5. 发送认证成功响应
-        // 示例：{"type": "auth_ack", "player_id": 100001, "timestamp": 1234567890}
         PlayerMessage response = new PlayerMessage();
         response.setType("auth_ack");
         response.setPlayerId(playerId);

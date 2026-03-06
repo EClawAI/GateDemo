@@ -37,22 +37,22 @@ public class PlayerClientService {
 
         try {
             latch = new CountDownLatch(1);
-            
+
             webSocketClient.execute(URI.create(url), session -> {
                 currentSession = session;
                 latch.countDown();
-                
+
                 authenticate(session);
                 startHeartbeat(session);
-                
+
                 return session.receive()
-                    .doOnNext(message -> {
-                        String payload = message.getPayloadAsText();
-                        logger.info("Received: {}", payload);
-                        handleMessage(payload);
-                    })
-                    .then();
-            }).block(Duration.ofSeconds(5));
+                        .doOnNext(message -> {
+                            String payload = message.getPayloadAsText();
+                            logger.info("Received: {}", payload);
+                            handleMessage(payload);
+                        })
+                        .then();
+            }).subscribe(); // 移除 block() 调用，使用非阻塞方式
 
             if (latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
                 logger.info("Connected successfully!");
