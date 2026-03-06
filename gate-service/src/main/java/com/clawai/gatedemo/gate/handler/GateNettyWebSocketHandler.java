@@ -11,6 +11,7 @@ import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
@@ -37,6 +38,8 @@ import java.util.Map;
  * @author clawAI
  * @since 2026-03-05
  */
+@Component
+@io.netty.channel.ChannelHandler.Sharable
 public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
     private static final Logger logger = LoggerFactory.getLogger(GateNettyWebSocketHandler.class);
