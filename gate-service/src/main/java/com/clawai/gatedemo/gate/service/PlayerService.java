@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.gate.service;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.gate.grpc.GameGrpcClient;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,29 +18,29 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * 玩家服务（纯 Netty 版本）
+ * 玩家服务（gRPC 版本）
  * 
  * 功能说明：
  * 1. 管理玩家连接（player_id ↔ Channel 映射）
  * 2. 发送消息给玩家
- * 3. 转发玩家消息到 Game 服务（通过 HTTP）
+ * 3. 转发玩家消息到 Game 服务（通过 gRPC 长连接）
  * 
- * 与 Redis 版本的区别：
- * - ❌ 不使用 Redis 存储 Player-Gate 映射
- * - ❌ 不使用 Redis Stream 转发消息
- * - ✅ 使用 ConcurrentHashMap 存储玩家连接
- * - ✅ 使用 HTTP 直接调用 Game 服务
+ * 与 HTTP 版本的区别：
+ * - ✅ gRPC 长连接，避免每次握手开销
+ * - ✅ HTTP/2 多路复用，并发更高
+ * - ✅ Protobuf 序列化，比 JSON 更小更快
+ * - ✅ 支持双向流心跳
  * 
  * 适用场景：
  * - 单机部署（Gate 和 Game 在同一台服务器）
- * - 开发/测试环境
- * - 简单演示
+ * - 多机部署（gRPC 支持负载均衡）
+ * - 生产环境
  * 
  * 线程安全：
  * 使用 ConcurrentHashMap 保证多线程安全
  * 
  * @author clawAI
- * @since 2026-03-05
+ * @since 2026-03-06
  */
 @Service
 public class PlayerService {
@@ -69,9 +70,10 @@ public class PlayerService {
     private final GateConfig gateConfig;
 
     /**
-     * HTTP 客户端（用于调用 Game 服务）
+     * gRPC 客户端（用于调用 Game 服务）
+     * 使用长连接，避免每次 HTTP 握手开销
      */
-    private final GameHttpClient gameHttpClient;
+    private final GameGrpcClient gameGrpcClient;
 
     /**
      * 玩家连接映射表（内存存储）
@@ -90,10 +92,10 @@ public class PlayerService {
     /**
      * 构造函数
      */
-    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper) {
+    public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, GameGrpcClient gameGrpcClient) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
-        this.gameHttpClient = new GameHttpClient(gateConfig);
+        this.gameGrpcClient = gameGrpcClient;
     }
 
     /**
@@ -227,17 +229,17 @@ public class PlayerService {
     }
 
     /**
-     * 转发玩家消息到 Game 服务（HTTP 方式）
+     * 转发玩家消息到 Game 服务（gRPC 方式）
      * 
      * 功能：
-     * 1. 构建 HTTP 请求
-     * 2. 发送到 Game 服务
+     * 1. 使用 gRPC 长连接发送消息
+     * 2. Protobuf 序列化，高效传输
      * 3. Game 服务处理游戏逻辑
      * 
-     * 与 Redis Stream 的区别：
-     * - ❌ 不写入 Redis Stream
-     * - ✅ 直接 HTTP 调用 Game 服务
-     * - ✅ 异步调用，不等待响应
+     * 与 HTTP 版本的区别：
+     * - ✅ gRPC 长连接，避免每次握手开销
+     * - ✅ Protobuf 序列化，比 JSON 更小更快
+     * - ✅ 异步调用，不阻塞 Netty IO 线程
      * 
      * @param playerId 玩家 ID
      * @param gameId 游戏 ID
@@ -246,25 +248,19 @@ public class PlayerService {
     public void forwardToGame(Long playerId, Integer gameId, PlayerMessage message) {
         // 异步转发，不阻塞 Netty IO 线程
         CompletableFuture.runAsync(() -> {
-            try {
-                // 1. 构建请求体
-                Map<String, Object> payload = Map.of(
-                    "gateId", gateConfig.getId(),
-                    "playerId", playerId,
-                    "gameId", gameId,
-                    "msgType", message.getMsgType() != null ? message.getMsgType() : "unknown",
-                    "seq", message.getSeq() != null ? message.getSeq() : 0,
-                    "timestamp", System.currentTimeMillis(),
-                    "body", message.getBody() != null ? message.getBody() : Map.of()
-                );
-
-                // 2. 发送 HTTP POST 请求
-                gameHttpClient.post("/api/game/receive", payload);
-                
-                logger.debug("📤 消息已转发到 Game: gameId={}, playerId={}", gameId, playerId);
-                
-            } catch (Exception e) {
-                logger.error("❌ 转发消息到 Game 失败：{}", e.getMessage());
+            // 使用 gRPC 发送消息
+            boolean success = gameGrpcClient.sendGameMessage(
+                playerId,
+                gameId,
+                message.getMsgType() != null ? message.getMsgType() : "unknown",
+                message.getSeq() != null ? message.getSeq() : 0,
+                message.getBody() != null ? message.getBody() : Map.of()
+            );
+            
+            if (success) {
+                logger.debug("📤 gRPC 消息已转发到 Game: gameId={}, playerId={}", gameId, playerId);
+            } else {
+                logger.error("❌ gRPC 消息转发失败：gameId={}, playerId={}", gameId, playerId);
             }
         });
     }
