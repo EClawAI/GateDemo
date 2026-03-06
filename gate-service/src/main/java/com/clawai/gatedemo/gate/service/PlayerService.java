@@ -10,6 +10,7 @@ import io.netty.channel.ChannelFuture;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -100,7 +101,7 @@ public class PlayerService {
      */
     public PlayerService(GateConfig gateConfig, ObjectMapper objectMapper, 
                        GameGrpcClientPool gameGrpcClientPool, 
-                       OfflineMessageService offlineMessageService) {
+                       @Lazy OfflineMessageService offlineMessageService) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
         this.gameGrpcClientPool = gameGrpcClientPool;

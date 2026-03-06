@@ -6,9 +6,9 @@ import com.clawai.gatedemo.gate.protocol.model.JsonMessageBody;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import io.netty.channel.Channel;
-import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -25,7 +25,8 @@ public class OfflineMessageService {
     private final ConnectionManager connectionManager;
     private final PlayerService playerService;
 
-    public OfflineMessageService(MessageQueueProducer producer, ConnectionManager connectionManager, PlayerService playerService) {
+    public OfflineMessageService(MessageQueueProducer producer, ConnectionManager connectionManager, 
+                               @Lazy PlayerService playerService) {
         this.producer = producer;
         this.connectionManager = connectionManager;
         this.playerService = playerService;
