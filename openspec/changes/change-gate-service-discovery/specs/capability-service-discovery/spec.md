@@ -69,6 +69,29 @@
 - **THEN** 根据hash(gateId)计算负责的Game分片
 - **AND** 只连接负责范围内的Game
 
+### Requirement: 玩家路由
+
+系统 SHALL 根据玩家ID使用一致性哈希将请求路由到对应的Game。
+
+#### Scenario: 玩家登录路由
+- **WHEN** 玩家发送登录消息到Gate
+- **THEN** Gate计算 hash(playerId) % gameCount
+- **AND** 根据计算结果路由到对应Game
+
+#### Scenario: 会话保持
+- **WHEN** 同一玩家再次发送消息
+- **THEN** 使用相同哈希算法计算
+- **AND** 确保路由到同一Game
+
+### Requirement: 路由失败处理
+
+系统 SHALL 在目标Game不可用时进行故障转移。
+
+#### Scenario: Game故障转移
+- **WHEN** 目标Game连接不可用
+- **THEN** 尝试其他健康Game
+- **AND** 返回错误或重试
+
 ### Requirement: 服务健康检测
 
 系统 SHALL 通过心跳机制维持服务健康状态。
@@ -101,5 +124,6 @@
 - **服务注册**: `service/ServiceRegistry`
 - **服务发现**: `service/ServiceDiscovery`
 - **分片策略**: `service/ShardingStrategy`
+- **路由策略**: `service/RoutingStrategy`
 - **连接管理**: `grpc/GameGrpcClientPool` (修改)
 - **本地缓存**: `service/ServiceCache`

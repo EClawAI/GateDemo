@@ -12,6 +12,12 @@ Gate启动 → 读取配置 → 与配置的Game建立连接 → 保持长连接
 3. **Game扩缩容**：Game服务扩缩容时，Gate无法感知
 4. **大规模场景**：Game节点超过10k时，现有架构无法支撑
 
+**负载均衡问题**：
+当每个Gate只连接部分Game时：
+- 玩家通过DNS/LB连接Gate（玩家知道Gate地址）
+- 玩家登录时，Gate需要知道将玩家路由到哪个Game
+- 如果Gate不管理所有Game，如何确定目标Game？
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -20,6 +26,7 @@ Gate启动 → 读取配置 → 与配置的Game建立连接 → 保持长连接
 - Game能够动态感知Gate服务的上线/下线
 - 支持服务健康检测
 - 支持大规模Game节点（10k+）
+- 实现Gate层负载均衡，支持玩家路由
 
 **Non-Goals:**
 - 不改变现有的gRPC通信协议
@@ -36,10 +43,6 @@ Gate启动 → 读取配置 → 与配置的Game建立连接 → 保持长连接
 - 支持临时节点，自动删除
 - 支持Watch机制，实时感知变化
 - 与Spring Cloud集成良好
-
-**备选方案**:
-- Nacos: 更适合Spring Cloud生态，但需要额外部署
-- Eureka: 不支持临时节点
 
 ### Decision 2: 服务注册方式
 
@@ -58,12 +61,7 @@ Gate启动 → 读取配置 → 与配置的Game建立连接 → 保持长连接
 
 #### 3.1 连接数限制
 
-单个Gate最多连接 `N` 个Game节点（可配置，默认100）：
-```yaml
-gate:
-  grpc:
-    max-connections: 100  # 单Gate最大连接数
-```
+单个Gate最多连接 `N` 个Game节点（可配置，默认100）
 
 #### 3.2 分片策略
 
@@ -74,42 +72,77 @@ gate:
 
 #### 3.3 滚动更新保护
 
-Gate滚动更新时，采用渐进式重连：
-- 每次最多重连 `M` 个Game（可配置，默认10）
-- 重连间隔 `T` 秒（可配置，默认5秒）
-- 避免瞬时大量ZooKeeper操作
+Gate滚动更新时，采用渐进式重连
 
-```yaml
-gate:
-  grpc:
-    reconnect-batch-size: 10   # 每次重连数量
-    reconnect-interval: 5000   # 重连间隔(ms)
+### Decision 4: 路由策略（重点）
+
+**问题**：玩家登录时，Gate如何知道将玩家路由到哪个Game？
+
+**解决方案**：一致性哈希
+
+#### 4.1 玩家→Game路由
+
+```
+玩家ID ──hash──> Game节点
+hash(playerId) % gameCount = targetGameIndex
 ```
 
-#### 3.4 ZooKeeper压力控制
+- **一致性哈希**：同一玩家始终路由到同一Game（会话保持）
+- **Gate本地计算**：Gate根据playerId计算目标Game
+- **无需外部依赖**：不需要查询路由表
 
-- **本地缓存**：Gate本地缓存Game服务列表，减少ZooKeeper查询
-- **批量处理**：ZooKeeper事件批量处理，避免频繁触发
-- **限流**：对ZooKeeper操作进行限流
+#### 4.2 路由流程
 
-### Decision 4: 连接管理策略
+```
+玩家连接Gate
+    ↓
+玩家发送登录消息 (playerId=12345)
+    ↓
+Gate计算: hash(12345) % 10000 = 5678
+    ↓
+Gate查找gameId=5678的连接
+    ↓
+通过gRPC转发到对应Game
+```
+
+#### 4.3 分片映射表
+
+Gate维护本地分片映射表：
+
+```java
+// 分片映射表
+Map<Integer, GameConnection> shardingMap;  // gameId -> Connection
+
+// 计算目标Game
+int targetGameId = (int) (Math.abs(playerId.hashCode()) % totalGameCount);
+```
+
+#### 4.4 Game服务发现更新
+
+当Game列表变化时：
+- ZooKeeper通知Gate
+- Gate更新本地分片映射表
+- 使用渐进式更新，避免瞬时压力
+
+#### 4.5 路由失败处理
+
+- **目标Game不可用**：尝试连接其他健康Game
+- **连接池满**：返回错误或重试
+
+### Decision 5: 连接管理策略
 
 **Gate端**:
-- 启动时：从ZooKeeper发现部分Game（根据分片），建立连接
-- Watch事件：Game新增 → 检查是否在负责的分片 → 决定是否连接
+- 启动时：从ZooKeeper发现所有Game，建立分片连接
+- Watch事件：Game新增 → 检查分片 → 决定是否连接
 - 定时检查：每30秒检查连接健康
 
 **Game端**:
 - 启动时：发现所有Gate，允许连接
 - Watch事件：Gate新增 → 允许连接；Gate删除 → 断开连接
 
-### Decision 5: 服务健康检测
+### Decision 6: 服务健康检测
 
 **方案**: 应用层心跳 + ZooKeeper临时节点TTL
-
-- Gate/Game每10秒向ZooKeeper发送心跳
-- 临时节点TTL设置为30秒
-- 超过30秒未心跳，节点自动删除
 
 ## Architecture
 
@@ -118,21 +151,58 @@ gate:
 │                    ZooKeeper                             │
 │  /gate/{id} ─────────── /game/{id}                     │
 │  /gate/{id} ─────────── /game/{id}                     │
-│  /gate/{id} ─────────── /game/{id}                     │
 └─────────────────────────────────────────────────────────┘
         ↑Watch              ↑Watch
         │                   │
    ┌────┴────┐         ┌────┴────┐
-   │ Gate-1  │         │ Game-1  │
-   │ (连接   │◄──────►│ (100+个) │
-   │  部分)  │         │         │
+   │ Gate    │         │ Game    │
+   │         │◄──────►│ (分片)  │
+   │ 路由表  │         │         │
    └─────────┘         └─────────┘
+   
+玩家请求流程：
+┌──────┐     ┌──────┐     ┌──────────┐     ┌──────┐
+│玩家  │────>│ Gate │────>│ 一致性   │────>│Game  │
+│      │     │      │     │ 哈希路由  │     │      │
+└──────┘     └──────┘     └──────────┘     └──────┘
 ```
 
-**大规模场景下的连接模型**：
-- 单Gate只连接100个Game（可配置）
-- 使用一致性哈希决定连接哪些Game
-- Game故障时，Gate自动切换到其他健康节点
+## 路由算法详解
+
+### 一致性哈希
+
+```java
+public class RoutingStrategy {
+    
+    // 使用一致性哈希确定目标Game
+    public int routeToGame(long playerId, List<GameInstance> games) {
+        if (games.isEmpty()) {
+            throw new RuntimeException("No available games");
+        }
+        
+        // 一致性哈希
+        int index = Math.abs(Long.hashCode(playerId)) % games.size();
+        return games.get(index).getGameId();
+    }
+    
+    // 或使用 Ketama 一致性哈希（推荐）
+    // 支持虚拟节点，减少数据倾斜
+}
+```
+
+### 分片映射表更新
+
+```java
+public void updateShardingMap(List<GameInstance> games) {
+    // 渐进式更新，避免瞬时压力
+    for (int i = 0; i < games.size(); i += BATCH_SIZE) {
+        // 每次更新一批
+        updateBatch(games.subList(i, i + BATCH_SIZE));
+        // 等待一段时间
+        sleep(INTERVAL);
+    }
+}
+```
 
 ## 配置示例
 
@@ -141,22 +211,19 @@ gate:
   id: gate-001
   zookeeper:
     host: localhost:2181
-    session-timeout: 30000
   grpc:
-    # 连接限制
     max-connections: 100
-    # 滚动更新保护
     reconnect-batch-size: 10
     reconnect-interval: 5000
-    # 心跳配置
-    heartbeat-interval: 10000
-    heartbeat-ttl: 30000
-  discovery:
-    # 分片策略
+  routing:
+    # 路由策略
+    strategy: consistent-hash  # 一致性哈希
+    virtual-nodes: 150        # 虚拟节点数
+    # 分片配置
     sharding-enabled: true
-    # 本地缓存
-    cache-enabled: true
-    cache-refresh-interval: 60000
+    # 重试配置
+    max-retries: 3
+    retry-interval: 1000
 ```
 
 ## Risks / Trade-offs
@@ -165,18 +232,16 @@ gate:
    - **解决**: ZooKeeper集群部署（3节点以上）
 
 2. **[风险]** 网络抖动导致频繁重连
-   - **解决**: 添加重连冷却时间（可配置）
+   - **解决**: 添加重连冷却时间
 
 3. **[风险]** 连接数过多
-   - **解决**: 限制单个Gate最多连接数（可配置）
+   - **解决**: 限制单个Gate最多连接数
 
 4. **[风险]** 10k+ Game节点导致ZooKeeper压力
-   - **解决**: 
-     - 本地缓存减少ZooKeeper查询
-     - 分片策略减少单Gate连接数
-     - 渐进式重连避免瞬时压力
+   - **解决**: 本地缓存 + 分片策略 + 渐进式更新
 
-5. **[风险]** Gate滚动更新时连接抖动
-   - **解决**: 
-     - 渐进式重连
-     - 一致性哈希分片保证同一Game由固定Gate服务
+5. **[风险]** 负载不均
+   - **解决**: 虚拟节点一致性哈希
+
+6. **[风险]** 玩家路由到已下线的Game
+   - **解决**: 健康检测 + 故障转移
