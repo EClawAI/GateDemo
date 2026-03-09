@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: center-service
+
+center:
+  server:
+    port: 8080
+  version:
+    version: 1.0.0
+    minVersion: 1.0.0
+    forceUpdate: false
+    updateUrl: https://example.com/update
+  sdk:
+    host: sdk.example.com
+    port: 8443
+  login:
+    host: login.example.com
+    port: 8081
+  announcements:
+    - title: 欢迎来到游戏
+      content: 欢迎体验本游戏，祝您游戏愉快！
+      type: normal

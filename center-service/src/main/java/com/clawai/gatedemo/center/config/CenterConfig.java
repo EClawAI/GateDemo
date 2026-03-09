@@ -1,0 +1,52 @@
+package com.clawai.gatedemo.center.config;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Data
+@Component
+@ConfigurationProperties(prefix = "center")
+public class CenterConfig {
+
+    private ServerConfig server = new ServerConfig();
+    private VersionConfig version = new VersionConfig();
+    private SdkConfig sdk = new SdkConfig();
+    private LoginConfig login = new LoginConfig();
+    private List<AnnouncementConfig> announcements = new ArrayList<>();
+
+    @Data
+    public static class ServerConfig {
+        private int port = 8080;
+    }
+
+    @Data
+    public static class VersionConfig {
+        private String version = "1.0.0";
+        private String minVersion = "1.0.0";
+        private boolean forceUpdate = false;
+        private String updateUrl = "https://example.com/update";
+    }
+
+    @Data
+    public static class SdkConfig {
+        private String host = "sdk.example.com";
+        private int port = 8443;
+    }
+
+    @Data
+    public static class LoginConfig {
+        private String host = "login.example.com";
+        private int port = 8081;
+    }
+
+    @Data
+    public static class AnnouncementConfig {
+        private String title;
+        private String content;
+        private String type = "normal";
+    }
+}

@@ -22,6 +22,7 @@
         <module>gate-service</module>
         <module>game-service</module>
         <module>player-client</module>
+        <module>center-service</module>
     </modules>
 
     <properties>
@@ -48,6 +49,11 @@
             <dependency>
                 <groupId>com.clawai.gatedemo</groupId>
                 <artifactId>player-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.clawai.gatedemo</groupId>
+                <artifactId>center-service</artifactId>
                 <version>${project.version}</version>
             </dependency>
             
