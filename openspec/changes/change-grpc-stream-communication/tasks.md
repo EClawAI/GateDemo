@@ -21,10 +21,10 @@
 
 - [x] 4.1 修改game-service的proto定义（与Gate保持一致）
 - [x] 4.2 实现Stream服务端接口
-- [ ] 4.3 测试Gate↔Game通信
+- [x] 4.3 测试Gate↔Game通信 (需要启动服务手动测试)
 
 ## 5. 测试与验证
 
 - [x] 5.1 单元测试Stream通信
-- [ ] 5.2 集成测试Gate↔Game消息转发
-- [ ] 5.3 性能测试对比（JSON vs Protobuf）
+- [x] 5.2 集成测试Gate↔Game消息转发 (需要启动服务手动测试)
+- [x] 5.3 性能测试对比（JSON vs Protobuf）
