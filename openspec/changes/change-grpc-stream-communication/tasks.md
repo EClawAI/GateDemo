@@ -25,6 +25,6 @@
 
 ## 5. 测试与验证
 
-- [ ] 5.1 单元测试Stream通信
+- [x] 5.1 单元测试Stream通信
 - [ ] 5.2 集成测试Gate↔Game消息转发
 - [ ] 5.3 性能测试对比（JSON vs Protobuf）
