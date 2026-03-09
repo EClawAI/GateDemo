@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
  * 1. 监听 gRPC 端口，接受 Gate 服务的连接
  * 2. 处理游戏消息转发
  * 3. 维护双向流心跳
+ * 4. 支持Stream双向流通信
  * 
  * 架构说明：
  * ┌─────────────────────────────────────────┐
@@ -29,6 +30,7 @@ import java.util.concurrent.TimeUnit;
  * │    ↓ 接受 gRPC 连接                       │
  * │  GameServiceImpl                        │
  * │    ├─ SendGameMessage - 处理游戏消息    │
+ * │    ├─ StreamCommunication - Stream双向流│
  * │    └─ Heartbeat - 处理心跳              │
  * └─────────────────────────────────────────┘
  * 
@@ -159,6 +161,58 @@ public class GameGrpcServer {
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
             }
+        }
+
+        /**
+         * Stream双向流通信（新增）
+         * 
+         * 支持Gate和Game之间的双向实时消息传递
+         * 
+         * @param responseObserver 响应观察者
+         * @return 请求观察者
+         */
+        @Override
+        public StreamObserver<GameMessage> streamCommunication(StreamObserver<GameMessage> responseObserver) {
+            logger.info("📡 Game Stream双向流通信已建立");
+
+            return new StreamObserver<GameMessage>() {
+                @Override
+                public void onNext(GameMessage request) {
+                    // 收到Gate发送的消息
+                    logger.debug("📥 收到Stream消息：gateId={}, playerId={}, msgType={}",
+                        request.getGateId(), request.getPlayerId(), request.getMsgType());
+
+                    try {
+                        // 处理游戏消息
+                        gameMessageHandler.handleGameMessage(
+                            request.getPlayerId(),
+                            request.getGameId(),
+                            request.getMsgType(),
+                            request.getSeq(),
+                            request.getBody()
+                        );
+
+                        // 可以选择是否回复（这里不回复，由业务逻辑决定何时推送）
+                        // 如果需要回复：
+                        // GameMessage response = GameMessage.newBuilder()...build();
+                        // responseObserver.onNext(response);
+
+                    } catch (Exception e) {
+                        logger.error("❌ 处理Stream消息失败：{}", e.getMessage());
+                    }
+                }
+
+                @Override
+                public void onError(Throwable t) {
+                    logger.error("❌ Stream通信错误：{}", t.getMessage());
+                }
+
+                @Override
+                public void onCompleted() {
+                    logger.info("🔚 Gate端Stream通信完成");
+                    responseObserver.onCompleted();
+                }
+            };
         }
 
         /**

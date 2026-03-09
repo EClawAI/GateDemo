@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
  * 1. 维护多个 Game 服务的 gRPC 长连接
  * 2. 根据 gameId 路由到对应的 Game 服务
  * 3. 支持动态添加/移除 Game 服务实例
+ * 4. 支持Stream双向流通信
  * 
  * 架构说明：
  * ┌─────────────────────────────────────────┐
@@ -45,6 +46,11 @@ import java.util.concurrent.TimeUnit;
  *       host: localhost
  *       port: 9092
  * 
+ * Stream通信说明：
+ * - 每个Game服务建立双向Stream连接
+ * - 通过Stream发送和接收游戏消息
+ * - 支持双向实时通信
+ * 
  * @author clawAI
  * @since 2026-03-06
  */
@@ -55,6 +61,11 @@ public class GameGrpcClientPool {
 
     private final GateConfig gateConfig;
     private final ObjectMapper objectMapper;
+    
+    /**
+     * Stream消息处理器回调
+     */
+    private StreamMessageHandler streamMessageHandler;
     
     /**
      * 连接池
@@ -73,7 +84,13 @@ public class GameGrpcClientPool {
         final ManagedChannel channel;
         final GameServiceGrpc.GameServiceBlockingStub blockingStub;
         final GameServiceGrpc.GameServiceStub asyncStub;
+        
+        // Stream通信
+        StreamObserver<GameMessage> gameStreamSender;
         StreamObserver<HeartbeatRequest> heartbeatObserver;
+        
+        // 连接状态
+        volatile boolean streamConnected = false;
         
         GrpcConnection(int gameId, String host, int port, ManagedChannel channel) {
             this.gameId = gameId;
@@ -86,11 +103,25 @@ public class GameGrpcClientPool {
     }
     
     /**
+     * Stream消息处理器接口
+     */
+    public interface StreamMessageHandler {
+        void onMessageReceived(GameMessage message);
+    }
+    
+    /**
      * 构造函数
      */
     public GameGrpcClientPool(GateConfig gateConfig, ObjectMapper objectMapper) {
         this.gateConfig = gateConfig;
         this.objectMapper = objectMapper;
+    }
+    
+    /**
+     * 设置Stream消息处理器
+     */
+    public void setStreamMessageHandler(StreamMessageHandler handler) {
+        this.streamMessageHandler = handler;
     }
     
     /**
@@ -137,6 +168,9 @@ public class GameGrpcClientPool {
         GrpcConnection conn = new GrpcConnection(gameId, host, port, channel);
         connectionPool.put(gameId, conn);
         
+        // 启动Stream连接
+        startStreamCommunication(conn);
+        
         // 启动心跳
         startHeartbeat(conn);
         
@@ -152,6 +186,11 @@ public class GameGrpcClientPool {
         GrpcConnection conn = connectionPool.remove(gameId);
         if (conn != null) {
             logger.info("🔌 移除 Game {} 连接", gameId);
+            
+            // 关闭Stream
+            if (conn.gameStreamSender != null) {
+                conn.gameStreamSender.onCompleted();
+            }
             
             // 完成心跳流
             if (conn.heartbeatObserver != null) {
@@ -180,7 +219,67 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 发送游戏消息到指定 Game 服务
+     * 启动Stream双向流通信
+     * 
+     * 这是任务2.1的核心实现：建立Bidirectional Stream
+     */
+    private void startStreamCommunication(GrpcConnection conn) {
+        // 使用Bidirectional Stream
+        conn.gameStreamSender = conn.asyncStub.streamCommunication(new StreamObserver<GameMessage>() {
+            @Override
+            public void onNext(GameMessage message) {
+                // 收到Game服务端推送的消息
+                logger.debug("📥 收到Game Stream消息：gameId={}, playerId={}, msgType={}", 
+                    message.getGameId(), message.getPlayerId(), message.getMsgType());
+                
+                // 回调处理
+                if (streamMessageHandler != null) {
+                    streamMessageHandler.onMessageReceived(message);
+                }
+            }
+            
+            @Override
+            public void onError(Throwable t) {
+                logger.error("❌ Game {} Stream通信错误：{}", conn.gameId, t.getMessage());
+                conn.streamConnected = false;
+                
+                // 触发重连
+                scheduleReconnect(conn);
+            }
+            
+            @Override
+            public void onCompleted() {
+                logger.info("🔚 Game {} Stream通信完成", conn.gameId);
+                conn.streamConnected = false;
+            }
+        });
+        
+        conn.streamConnected = true;
+        logger.info("✅ Game {} Stream通信已启动", conn.gameId);
+    }
+    
+    /**
+     * 调度重连
+     */
+    private void scheduleReconnect(GrpcConnection conn) {
+        // 5秒后重连
+        new Thread(() -> {
+            try {
+                Thread.sleep(5000);
+                logger.info("🔄 尝试重连 Game {}", conn.gameId);
+                
+                // 重新建立Stream连接
+                if (connectionPool.containsKey(conn.gameId)) {
+                    startStreamCommunication(conn);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+    }
+    
+    /**
+     * 通过Stream发送游戏消息（任务2.2）
      * 
      * @param gameId 游戏 ID
      * @param playerId 玩家 ID
@@ -188,6 +287,50 @@ public class GameGrpcClientPool {
      * @param seq 消息序列号
      * @param body 消息体（Java 对象）
      * @return 是否发送成功
+     */
+    public boolean sendGameMessageViaStream(int gameId, Long playerId, String msgType, int seq, Object body) {
+        GrpcConnection conn = getConnection(gameId);
+        
+        if (conn == null) {
+            logger.error("❌ Game {} 连接不存在，无法发送消息", gameId);
+            return false;
+        }
+        
+        // 检查Stream是否已连接
+        if (!conn.streamConnected || conn.gameStreamSender == null) {
+            logger.warn("⚠️ Game {} Stream未连接，尝试使用阻塞式调用", gameId);
+            return sendGameMessage(gameId, playerId, msgType, seq, body);
+        }
+        
+        try {
+            // 1. 将消息体转换为 JSON 字符串，再转为二进制
+            String bodyJson = objectMapper.writeValueAsString(body);
+            
+            // 2. 构建 gRPC 消息（二进制格式）
+            GameMessage message = GameMessage.newBuilder()
+                .setGateId(gateConfig.getId())
+                .setPlayerId(playerId)
+                .setGameId(gameId)
+                .setMsgType(msgType != null ? msgType : "unknown")
+                .setSeq(seq)
+                .setTimestamp(System.currentTimeMillis())
+                .setBody(com.google.protobuf.ByteString.copyFromUtf8(bodyJson))
+                .build();
+            
+            // 3. 通过Stream发送（异步）
+            conn.gameStreamSender.onNext(message);
+            
+            logger.debug("📤 Stream消息发送成功：gameId={}, playerId={}", gameId, playerId);
+            return true;
+            
+        } catch (Exception e) {
+            logger.error("❌ Stream消息发送失败：gameId={}, {}", gameId, e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 发送游戏消息（阻塞式，备用方案）
      */
     public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, Object body) {
         GrpcConnection conn = getConnection(gameId);

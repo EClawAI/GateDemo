@@ -6,21 +6,21 @@
 
 ## 2. Gate服务修改
 
-- [ ] 2.1 修改 `GameGrpcClientPool`，实现Bidirectional Stream连接
-- [ ] 2.2 添加Stream消息发送方法
-- [ ] 2.3 添加Stream消息接收处理
-- [ ] 2.4 实现连接断开重连机制
+- [x] 2.1 修改 `GameGrpcClientPool`，实现Bidirectional Stream连接
+- [x] 2.2 添加Stream消息发送方法
+- [x] 2.3 添加Stream消息接收处理
+- [x] 2.4 实现连接断开重连机制
 
 ## 3. 二进制序列化
 
-- [ ] 3.1 添加Protobuf序列化工具类
-- [ ] 3.2 修改消息发送逻辑，使用Protobuf序列化
-- [ ] 3.3 修改消息接收逻辑，使用Protobuf反序列化
+- [x] 3.1 添加Protobuf序列化工具类 (已内嵌在ByteString中)
+- [x] 3.2 修改消息发送逻辑，使用Protobuf序列化
+- [x] 3.3 修改消息接收逻辑，使用Protobuf反序列化
 
 ## 4. Game服务修改
 
-- [ ] 4.1 修改game-service的proto定义（与Gate保持一致）
-- [ ] 4.2 实现Stream服务端接口
+- [x] 4.1 修改game-service的proto定义（与Gate保持一致）
+- [x] 4.2 实现Stream服务端接口
 - [ ] 4.3 测试Gate↔Game通信
 
 ## 5. 测试与验证
