@@ -30,16 +30,18 @@ public class GameMessageHandler {
     }
 
     /**
-     * 处理游戏消息（gRPC 调用）
-     * 
+     * 处理游戏消息
+     *
      * @param playerId 玩家 ID
      * @param gameId 游戏 ID
      * @param msgType 消息类型
      * @param seq 消息序列号
-     * @param bodyStr 消息体（JSON 字符串）
+     * @param bodyBytes 消息体（二进制Protobuf数据）
      */
-    public void handleGameMessage(Long playerId, Integer gameId, String msgType, int seq, String bodyStr) {
+    public void handleGameMessage(Long playerId, Integer gameId, String msgType, int seq, com.google.protobuf.ByteString bodyBytes) {
         try {
+            // 将二进制消息体转换为字符串再解析为Map
+            String bodyStr = bodyBytes.toStringUtf8();
             Map<String, Object> body = objectMapper.readValue(bodyStr, Map.class);
             
             logger.info("🎮 收到游戏消息：playerId={}, gameId={}, msgType={}, seq={}", 
@@ -70,7 +72,9 @@ public class GameMessageHandler {
      * @param bodyStr 消息体（JSON 字符串）
      */
     public void handleMessage(Long playerId, String msgType, String bodyStr) {
-        handleGameMessage(playerId, 0, msgType, 0, bodyStr);
+        // 将字符串转换为ByteString
+        com.google.protobuf.ByteString bodyBytes = com.google.protobuf.ByteString.copyFromUtf8(bodyStr);
+        handleGameMessage(playerId, 0, msgType, 0, bodyBytes);
     }
 
     /**

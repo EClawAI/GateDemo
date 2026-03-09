@@ -198,10 +198,10 @@ public class GameGrpcClientPool {
         }
         
         try {
-            // 1. 将消息体转换为 JSON 字符串
+            // 1. 将消息体转换为 JSON 字符串，再转为二进制
             String bodyJson = objectMapper.writeValueAsString(body);
             
-            // 2. 构建 gRPC 消息
+            // 2. 构建 gRPC 消息（二进制格式）
             GameMessage message = GameMessage.newBuilder()
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
@@ -209,7 +209,7 @@ public class GameGrpcClientPool {
                 .setMsgType(msgType != null ? msgType : "unknown")
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
-                .setBody(bodyJson)
+                .setBody(com.google.protobuf.ByteString.copyFromUtf8(bodyJson))
                 .build();
             
             // 3. 发送消息（同步调用）
