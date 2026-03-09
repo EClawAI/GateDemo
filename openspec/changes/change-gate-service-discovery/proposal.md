@@ -15,31 +15,25 @@
 - 实现真正的无状态Gate
 
 **特殊考虑**：
-当Game服务节点数量超过10k时，需要特别设计以避免压力：
-1. 单个Gate不应该连接所有Game节点（资源限制）
-2. Gate滚动更新时不应同时触发大量ZooKeeper操作
-3. 需要实现连接池限制和负载策略
+当Game服务节点数量超过10k时，需要特别设计以避免压力
 
-**负载均衡考虑**：
-当每个Gate只连接部分Game时，需要解决：
-1. 玩家如何知道连接哪个Gate？
-2. Gate如何知道将玩家路由到哪个Game？
-3. 如何保证同一玩家始终路由到同一Game（会话保持）？
+**负载均衡问题**：
+当每个Gate只连接部分Game时，玩家如何知道连接哪个Game？
+解决方案：增加EnterServer（入口服）
 
 ## What Changes
 
-1. **引入服务发现**：使用ZooKeeper/Nacos实现服务注册与发现
-2. **动态连接管理**：Gate根据服务发现动态建立/断开与Game的连接
-3. **连接数限制**：限制单个Gate连接的Game数量（可配置）
-4. **负载策略**：实现连接分配策略，避免单点压力
-5. **健康检测**：Gate和Game相互感知对端的健康状态
-6. **路由策略**：实现Gate层负载均衡，支持玩家路由
+1. **新增EnterServer**：入口服务，处理玩家登录和选服
+2. **引入服务发现**：使用ZooKeeper实现服务注册与发现
+3. **动态连接管理**：Gate根据服务发现动态建立/断开与Game的连接
+4. **健康检测**：Gate和Game相互感知对端的健康状态
+5. **路由策略**：实现Gate层负载均衡，支持玩家路由
 
 ## Capabilities
 
 ### New Capabilities
 - `capability-service-discovery`: 服务发现能力
-- `capability-routing`: 负载路由能力
+- `capability-enter-server`: 入口服务能力
 
 ### Modified Capabilities
 - `capability-grpc-stream`: 从静态配置改为动态发现
@@ -47,6 +41,5 @@
 ## Impact
 
 - 影响 `gate-service` 的 `grpc/GameGrpcClientPool` 类
-- 影响 `gate-service` 新增服务发现组件
-- 影响 `gate-service` 新增路由组件
+- 影响新增 `enter-service` 模块
 - 影响 `game-service` 新增服务注册逻辑

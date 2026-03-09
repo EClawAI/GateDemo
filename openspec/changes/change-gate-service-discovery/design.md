@@ -1,247 +1,157 @@
 ## Context
 
-当前Gate服务与Game服务之间的gRPC连接是静态的：
-
-```
-Gate启动 → 读取配置 → 与配置的Game建立连接 → 保持长连接
-```
+当前Gate服务与Game服务之间的gRPC连接是静态的
 
 问题场景：
-1. **K8s扩缩容**：Gate Pod从3个增加到5个，新Pod需要建立与所有Game的连接
-2. **K8s滚动更新**：旧Gate Pod关闭时断开所有连接，新Pod重新建立
-3. **Game扩缩容**：Game服务扩缩容时，Gate无法感知
-4. **大规模场景**：Game节点超过10k时，现有架构无法支撑
+1. **K8s扩缩容**：Gate Pod变化时连接问题
+2. **Game扩缩容**：Gate无法感知Game变化
 
-**负载均衡问题**：
-当每个Gate只连接部分Game时：
-- 玩家通过DNS/LB连接Gate（玩家知道Gate地址）
-- 玩家登录时，Gate需要知道将玩家路由到哪个Game
-- 如果Gate不管理所有Game，如何确定目标Game？
+**新问题**：
+当Gate只连接部分Game时，玩家如何路由？
 
-## Goals / Non-Goals
+## Architecture - EnterServer
 
-**Goals:**
-- Gate实现无状态，支持K8s水平扩缩容
-- Gate能够动态感知Game服务的上线/下线
-- Game能够动态感知Gate服务的上线/下线
-- 支持服务健康检测
-- 支持大规模Game节点（10k+）
-- 实现Gate层负载均衡，支持玩家路由
-
-**Non-Goals:**
-- 不改变现有的gRPC通信协议
-- 不改变消息的业务语义
-
-## Decisions
-
-### Decision 1: 选择服务发现方案
-
-**选择**: ZooKeeper
-
-**理由**:
-- 成熟稳定，业界广泛使用
-- 支持临时节点，自动删除
-- 支持Watch机制，实时感知变化
-- 与Spring Cloud集成良好
-
-### Decision 2: 服务注册方式
-
-**Gate注册**:
-- 临时节点：`/gate/{gateId}`
-- 节点内容：`{host}:{port}:{healthy}`
-- 心跳维持：每10秒更新一次
-
-**Game注册**:
-- 临时节点：`/game/{gameId}`
-- 节点内容：`{host}:{port}:{healthy}`
-
-### Decision 3: 大规模场景设计（10k+ Game节点）
-
-**核心原则**：单Gate不连接所有Game，采用分片/路由策略
-
-#### 3.1 连接数限制
-
-单个Gate最多连接 `N` 个Game节点（可配置，默认100）
-
-#### 3.2 分片策略
-
-采用一致性哈希分片：
-- 每个Gate根据 `hash(gateId) % gameCount` 确定负责的Game分片
-- 同一Game始终由固定的几个Gate服务
-- 减少连接抖动
-
-#### 3.3 滚动更新保护
-
-Gate滚动更新时，采用渐进式重连
-
-### Decision 4: 路由策略（重点）
-
-**问题**：玩家登录时，Gate如何知道将玩家路由到哪个Game？
-
-**解决方案**：一致性哈希
-
-#### 4.1 玩家→Game路由
+### 整体架构
 
 ```
-玩家ID ──hash──> Game节点
-hash(playerId) % gameCount = targetGameIndex
+┌─────────────────────────────────────────────────────────────────┐
+│                        ZooKeeper                                  │
+│  /gate/{id} ─────────────── /game/{id} ─────────────── /enter │
+└─────────────────────────────────────────────────────────────────┘
+        ↑Watch                   ↑Watch
+        │                        │
+   ┌────┴────┐            ┌─────┴─────┐
+   │  Gate   │            │  Enter    │
+   │ (多个)   │            │  Server   │
+   └─────────┘            └───────────┘
+        │                        │
+        │  gRPC                  │
+        └────────┬───────────────┘
+                 │
+          ┌──────┴──────┐
+          │  Game Server │
+          │   (多个)     │
+          └─────────────┘
 ```
 
-- **一致性哈希**：同一玩家始终路由到同一Game（会话保持）
-- **Gate本地计算**：Gate根据playerId计算目标Game
-- **无需外部依赖**：不需要查询路由表
+### EnterServer职责
 
-#### 4.2 路由流程
+1. **玩家登录入口**：处理首次登录请求
+2. **选服逻辑**：返回玩家应该连接的Game服务器
+3. **会话管理**：记录玩家的GameServer映射
+4. **负载均衡**：选择负载最低的Game
+
+### 玩家登录流程
 
 ```
-玩家连接Gate
-    ↓
-玩家发送登录消息 (playerId=12345)
-    ↓
-Gate计算: hash(12345) % 10000 = 5678
-    ↓
-Gate查找gameId=5678的连接
-    ↓
-通过gRPC转发到对应Game
+玩家客户端
+     ↓
+连接EnterServer (或通过DNS/LB)
+     ↓
+发送 login 请求 (playerId, deviceId)
+     ↓
+EnterServer查询玩家数据
+     ├── 首次登录 → 选择负载最低的Game → 返回Game地址
+     └── 已创建角色 → 返回上次登录的Game地址
+     ↓
+玩家连接Gate → Gate转发到对应Game
 ```
 
-#### 4.3 分片映射表
-
-Gate维护本地分片映射表：
+### EnterServer数据模型
 
 ```java
-// 分片映射表
-Map<Integer, GameConnection> shardingMap;  // gameId -> Connection
-
-// 计算目标Game
-int targetGameId = (int) (Math.abs(playerId.hashCode()) % totalGameCount);
-```
-
-#### 4.4 Game服务发现更新
-
-当Game列表变化时：
-- ZooKeeper通知Gate
-- Gate更新本地分片映射表
-- 使用渐进式更新，避免瞬时压力
-
-#### 4.5 路由失败处理
-
-- **目标Game不可用**：尝试连接其他健康Game
-- **连接池满**：返回错误或重试
-
-### Decision 5: 连接管理策略
-
-**Gate端**:
-- 启动时：从ZooKeeper发现所有Game，建立分片连接
-- Watch事件：Game新增 → 检查分片 → 决定是否连接
-- 定时检查：每30秒检查连接健康
-
-**Game端**:
-- 启动时：发现所有Gate，允许连接
-- Watch事件：Gate新增 → 允许连接；Gate删除 → 断开连接
-
-### Decision 6: 服务健康检测
-
-**方案**: 应用层心跳 + ZooKeeper临时节点TTL
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    ZooKeeper                             │
-│  /gate/{id} ─────────── /game/{id}                     │
-│  /gate/{id} ─────────── /game/{id}                     │
-└─────────────────────────────────────────────────────────┘
-        ↑Watch              ↑Watch
-        │                   │
-   ┌────┴────┐         ┌────┴────┐
-   │ Gate    │         │ Game    │
-   │         │◄──────►│ (分片)  │
-   │ 路由表  │         │         │
-   └─────────┘         └─────────┘
-   
-玩家请求流程：
-┌──────┐     ┌──────┐     ┌──────────┐     ┌──────┐
-│玩家  │────>│ Gate │────>│ 一致性   │────>│Game  │
-│      │     │      │     │ 哈希路由  │     │      │
-└──────┘     └──────┘     └──────────┘     └──────┘
-```
-
-## 路由算法详解
-
-### 一致性哈希
-
-```java
-public class RoutingStrategy {
-    
-    // 使用一致性哈希确定目标Game
-    public int routeToGame(long playerId, List<GameInstance> games) {
-        if (games.isEmpty()) {
-            throw new RuntimeException("No available games");
-        }
-        
-        // 一致性哈希
-        int index = Math.abs(Long.hashCode(playerId)) % games.size();
-        return games.get(index).getGameId();
-    }
-    
-    // 或使用 Ketama 一致性哈希（推荐）
-    // 支持虚拟节点，减少数据倾斜
+// 玩家会话
+class PlayerSession {
+    Long playerId;
+    Integer gameId;           // 当前所在的Game
+    String gameHost;          // Game地址
+    Integer gamePort;
+    Long lastLoginTime;
+    Integer onlineStatus;     // 0:离线 1:在线
 }
 ```
 
-### 分片映射表更新
+### 路由决策
+
+| 场景 | 决策 | 说明 |
+|------|------|------|
+| 首次登录 | 选择负载最低的Game | 负载均衡 |
+| 已创角 | 返回上次Game | 会话保持 |
+| 上次Game已下线 | 选择其他Game | 故障转移 |
+| 指定服登录 | 验证并返回 | 玩家主动选服 |
+
+### EnterServer与Game的交互
+
+EnterServer需要知道Game的负载情况：
 
 ```java
-public void updateShardingMap(List<GameInstance> games) {
-    // 渐进式更新，避免瞬时压力
-    for (int i = 0; i < games.size(); i += BATCH_SIZE) {
-        // 每次更新一批
-        updateBatch(games.subList(i, i + BATCH_SIZE));
-        // 等待一段时间
-        sleep(INTERVAL);
-    }
-}
+// 从ZooKeeper获取Game列表
+List<GameInstance> games = zkService.getGameInstances();
+
+// 负载信息来源：
+// 1. ZooKeeper节点数据 (gameId:host:port:onlineCount)
+// 2. Game定期上报负载到Redis/ZK
+// 3. Gate上报连接数
 ```
 
-## 配置示例
+### Gate设计调整
+
+由于EnterServer解决了路由问题，Gate可以简化：
+
+```
+Gate设计：
+- Gate连接所有Game（或按需连接）
+- EnterServer返回gameId后，Gate建立/复用连接到该Game的连接
+- Gate只负责消息转发
+```
+
+### 数据存储
 
 ```yaml
-gate:
-  id: gate-001
-  zookeeper:
-    host: localhost:2181
-  grpc:
-    max-connections: 100
-    reconnect-batch-size: 10
-    reconnect-interval: 5000
-  routing:
-    # 路由策略
-    strategy: consistent-hash  # 一致性哈希
-    virtual-nodes: 150        # 虚拟节点数
-    # 分片配置
-    sharding-enabled: true
-    # 重试配置
-    max-retries: 3
-    retry-interval: 1000
+存储方案：
+- Redis: 玩家会话数据 (快速读写)
+  - key: player:{playerId}
+  - value: {gameId, gameHost, gamePort, lastLoginTime}
+  
+- MySQL: 玩家基础数据
+  - player_info: 玩家ID、名称、等级等
+  - player_game_record: 玩家游戏记录
 ```
 
-## Risks / Trade-offs
+### 配置示例
 
-1. **[风险]** ZooKeeper单点故障
-   - **解决**: ZooKeeper集群部署（3节点以上）
+```yaml
+enter:
+  server:
+    id: enter-001
+    port: 8887
+  redis:
+    host: localhost
+    port: 6379
+  game:
+    # Game服务发现
+    discovery-enabled: true
+  routing:
+    # 路由策略
+    strategy: load-balance  # 负载均衡
+    # 会话保持
+    session-timeout: 3600
+```
 
-2. **[风险]** 网络抖动导致频繁重连
-   - **解决**: 添加重连冷却时间
+## 实施
 
-3. **[风险]** 连接数过多
-   - **解决**: 限制单个Gate最多连接数
+### 模块划分
 
-4. **[风险]** 10k+ Game节点导致ZooKeeper压力
-   - **解决**: 本地缓存 + 分片策略 + 渐进式更新
+```
+项目结构：
+├── gate-service/     # 网关服务
+├── enter-service/   # 入口服务 (新增)
+└── game-service/    # 游戏服务
+```
 
-5. **[风险]** 负载不均
-   - **解决**: 虚拟节点一致性哈希
+### EnterService核心功能
 
-6. **[风险]** 玩家路由到已下线的Game
-   - **解决**: 健康检测 + 故障转移
+1. **LoginHandler**: 处理登录请求
+2. **GameRouter**: 路由决策
+3. **SessionManager**: 会话管理
+4. **ServiceDiscovery**: Game服务发现
