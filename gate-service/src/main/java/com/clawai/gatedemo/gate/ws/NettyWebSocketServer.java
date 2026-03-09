@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.gate.ws;
 
+import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -37,8 +38,8 @@ public class NettyWebSocketServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyWebSocketServer.class);
 
-    /** WebSocket 服务器端口 */
-    private final int webSocketPort;
+    /** Gate配置 */
+    private final GateConfig gateConfig;
 
     /** 玩家连接处理器 */
     private final GateNettyWebSocketHandler gateWebSocketHandler;
@@ -55,11 +56,11 @@ public class NettyWebSocketServer {
     /**
      * 构造函数
      * 
-     * @param webSocketPort WebSocket 端口
+     * @param gateConfig Gate配置
      * @param gateWebSocketHandler 玩家连接处理器
      */
-    public NettyWebSocketServer(int webSocketPort, GateNettyWebSocketHandler gateWebSocketHandler) {
-        this.webSocketPort = webSocketPort;
+    public NettyWebSocketServer(GateConfig gateConfig, GateNettyWebSocketHandler gateWebSocketHandler) {
+        this.gateConfig = gateConfig;
         this.gateWebSocketHandler = gateWebSocketHandler;
     }
 
@@ -74,7 +75,7 @@ public class NettyWebSocketServer {
      */
     public void start() {
         logger.info("=== 开始启动 Netty WebSocket 服务器 ===");
-        logger.info("监听端口：{}", webSocketPort);
+        logger.info("监听端口：{}", gateConfig.getPort());
 
         // 1. 创建 Boss 线程组（接受连接）
         bossGroup = new NioEventLoopGroup(1);
@@ -120,14 +121,14 @@ public class NettyWebSocketServer {
             logger.info("ServerBootstrap 配置完成");
 
             // 5. 绑定端口并启动
-            ChannelFuture future = bootstrap.bind(webSocketPort).sync();
+            ChannelFuture future = bootstrap.bind(gateConfig.getPort()).sync();
             serverChannel = future.channel();
 
             logger.info("===========================================");
             logger.info("✅ Netty WebSocket 服务器启动成功！");
-            logger.info("监听地址：0.0.0.0:{}", webSocketPort);
+            logger.info("监听地址：0.0.0.0:{}", gateConfig.getPort());
             logger.info("WebSocket 路径：/ws");
-            logger.info("完整地址：ws://localhost:{}/ws", webSocketPort);
+            logger.info("完整地址：ws://localhost:{}/ws", gateConfig.getPort());
             logger.info("===========================================");
 
         } catch (Exception e) {

@@ -4,7 +4,6 @@ import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
 import com.clawai.gatedemo.gate.ws.NettyWebSocketServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
@@ -14,7 +13,7 @@ import jakarta.annotation.PreDestroy;
  * WebSocket服务器配置 - Spring配置类，负责组装和启动服务
  *
  * 职责：
- * 1. 注入依赖（Handler）
+ * 1. 注入依赖（GateConfig、Handler）
  * 2. 创建服务实例
  * 3. 调用服务启动/停止
  *
@@ -32,9 +31,8 @@ public class NettyWebSocketServerConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyWebSocketServerConfig.class);
 
-    /** WebSocket 服务器端口 */
-    @Value("${gate.port:8888}")
-    private int webSocketPort;
+    /** Gate配置 */
+    private final GateConfig gateConfig;
 
     /** 玩家连接处理器 */
     private final GateNettyWebSocketHandler gateWebSocketHandler;
@@ -43,9 +41,10 @@ public class NettyWebSocketServerConfig {
     private NettyWebSocketServer webSocketServer;
 
     /**
-     * 构造函数
+     * 构造函数 - Spring自动注入依赖
      */
-    public NettyWebSocketServerConfig(GateNettyWebSocketHandler gateWebSocketHandler) {
+    public NettyWebSocketServerConfig(GateConfig gateConfig, GateNettyWebSocketHandler gateWebSocketHandler) {
+        this.gateConfig = gateConfig;
         this.gateWebSocketHandler = gateWebSocketHandler;
     }
 
@@ -56,8 +55,8 @@ public class NettyWebSocketServerConfig {
     public void start() {
         logger.info("=== 启动 WebSocket 服务器配置 ===");
         
-        // 创建服务实例
-        webSocketServer = new NettyWebSocketServer(webSocketPort, gateWebSocketHandler);
+        // 创建服务实例，注入GateConfig
+        webSocketServer = new NettyWebSocketServer(gateConfig, gateWebSocketHandler);
         
         // 启动服务
         webSocketServer.start();
