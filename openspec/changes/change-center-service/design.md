@@ -1,35 +1,22 @@
 ## Context
 
-CenterService作为中心服务，提供HTTP接口给客户端调用。
+CenterService作为中心配置服务，提供HTTP接口给客户端调用。
 
 ## Architecture
 
 ```
 ┌─────────────┐     HTTP      ┌─────────────┐
 │   客户端    │ ◄──────────► │  CenterService │
-└─────────────┘              └───────┬─────┘
-                                           │
-                                           │ 查询
-                                           ▼
-                                    ┌─────────────┐
-                                    │    Redis    │
-                                    └─────────────┘
+└─────────────┘              └─────────────┘
 ```
 
 ## 核心接口
 
-### 入口接口（一次请求获取所有信息）
+### 配置接口
 
-**接口**: `POST /api/v1/enter`
+**接口**: `GET /api/v1/config`
 
-**请求**:
-```json
-{
-  "playerId": 12345,
-  "token": "xxx",
-  "deviceId": "xxx"
-}
-```
+客户端启动时请求此接口获取配置信息。
 
 **响应**:
 ```json
@@ -42,83 +29,21 @@ CenterService作为中心服务，提供HTTP接口给客户端调用。
       "forceUpdate": false,
       "updateUrl": "https://example.com/update"
     },
-    "gate": {
-      "id": "gate-01",
-      "host": "gate1.example.com",
-      "port": 8888
+    "sdk": {
+      "host": "sdk.example.com",
+      "port": 8443
     },
-    "gameId": 1001,
-    "gameHost": "game1.example.com",
-    "gamePort": 9090
+    "login": {
+      "host": "login.example.com",
+      "port": 8081
+    },
+    "announcement": {
+      "title": "欢迎来到游戏",
+      "content": "游戏公告内容",
+      "type": "normal"
+    }
   }
 }
-```
-
-### 登录记录接口
-
-**接口**: `POST /api/v1/game/login-record`
-
-玩家登录Game服后通知CenterService更新登录记录。
-
-**请求**:
-```json
-{
-  "playerId": 12345,
-  "gameId": 1001
-}
-```
-
-### Gate心跳接口
-
-**接口**: `POST /api/v1/gate/heartbeat`
-
-Gate服务定期上报状态。
-
-**请求**:
-```json
-{
-  "gateId": "gate-01",
-  "host": "192.168.1.1",
-  "port": 8888,
-  "online": 100
-}
-```
-
-## 路由决策
-
-| 场景 | 决策 | 说明 |
-|------|------|------|
-| 未登录 | 推荐服 | 从配置中选择负载最低的推荐服 |
-| 已登录 | 上次服 | 返回Redis中记录的gameId |
-| 上次Game已下线 | 推荐服 | 返回推荐服 |
-
-## 数据模型
-
-### Redis Key设计
-
-```
-# 玩家登录记录
-player:login:{playerId} -> {gameId}:{timestamp}
-
-# Gate在线人数
-gate:online:{gateId} -> count
-
-# 推荐服配置
-config:recommend:games -> [gameId1, gameId2, gameId3]
-```
-
-### 推荐服配置
-
-```yaml
-center:
-  recommend:
-    games:
-      - gameId: 1001
-        name: "推荐服1"
-        priority: 1
-      - gameId: 1002
-        name: "推荐服2"  
-        priority: 2
 ```
 
 ## 实现
@@ -128,22 +53,13 @@ center:
 ```
 center-service/
 ├── controller/
-│   ├── EnterController     # 入口接口
-│   └── GateController     # Gate心跳
+│   └── ConfigController     # 配置接口
 ├── service/
-│   ├── EnterService      # 入口服务
-│   ├── GateService      # Gate服务
-│   └── GameRouteService # 路由服务
+│   └── ConfigService      # 配置服务
 └── config/
 ```
 
 ### 核心类
 
-1. **EnterController**
-   - `POST /api/v1/enter` - 入口接口
-
-2. **GateController**
-   - `POST /api/v1/gate/heartbeat` - Gate心跳
-
-3. **GameController**
-   - `POST /api/v1/game/login-record` - 登录记录
+1. **ConfigController**
+   - `GET /api/v1/config` - 获取配置

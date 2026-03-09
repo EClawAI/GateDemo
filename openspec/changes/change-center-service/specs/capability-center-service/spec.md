@@ -2,64 +2,47 @@
 
 ## ADDED Requirements
 
-### Requirement: 入口接口
+### Requirement: 配置接口
 
-系统 SHALL 提供一次请求获取所有入口信息。
+系统 SHALL 提供配置接口，返回客户端需要的配置信息。
 
-#### Scenario: 客户端请求入口
-- **WHEN** 客户端请求入口接口
-- **THEN** 返回版本信息、Gate信息和gameId
+#### Scenario: 客户端获取配置
+- **WHEN** 客户端请求配置接口
+- **THEN** 返回版本、SDK地址、Login地址、公告等信息
 
 ### Requirement: 版本检查
 
-系统 SHALL 在入口接口中返回版本信息。
+系统 SHALL 返回客户端版本信息。
 
-#### Scenario: 版本检查
-- **WHEN** 客户端请求入口接口
-- **THEN** 返回当前版本号、最小版本号、是否强制更新
+#### Scenario: 版本信息
+- **WHEN** 客户端请求配置接口
+- **THEN** 返回版本号、最小版本号、是否强制更新、更新地址
 
-### Requirement: Gate信息
+### Requirement: SDK地址
 
-系统 SHALL 在入口接口中返回Gate服务器信息。
+系统 SHALL 返回SDK服务器地址。
 
-#### Scenario: Gate信息返回
-- **WHEN** 客户端请求入口接口
-- **THEN** 返回可用Gate的地址和端口
+#### Scenario: SDK地址
+- **WHEN** 客户端请求配置接口
+- **THEN** 返回SDK服务器的host和port
 
-### Requirement: 游戏服路由
+### Requirement: Login地址
 
-系统 SHALL 在入口接口中返回gameId。
+系统 SHALL 返回Login服务地址。
 
-#### Scenario: 新角色登录
-- **WHEN** 玩家首次登录游戏
-- **THEN** 返回推荐服的gameId
+#### Scenario: Login地址
+- **WHEN** 客户端请求配置接口
+- **THEN** 返回Login服务的host和port
 
-#### Scenario: 已登录玩家
-- **WHEN** 玩家已创建角色
-- **THEN** 返回上次登录的gameId
+### Requirement: 公告信息
 
-#### Scenario: 上次Game已下线
-- **WHEN** 上次登录的Game服已下线
-- **THEN** 返回推荐服的gameId
+系统 SHALL 返回游戏公告信息。
 
-### Requirement: 登录记录
-
-系统 SHALL 记录玩家的登录信息。
-
-#### Scenario: 玩家登录Game
-- **WHEN** 玩家成功登录Game服
-- **THEN** 记录playerId和gameId到Redis
-
-### Requirement: Gate心跳
-
-系统 SHALL 接收Gate的心跳上报。
-
-#### Scenario: Gate上报状态
-- **WHEN** Gate服务定期上报心跳
-- **AND** 更新Gate在线人数
+#### Scenario: 公告信息
+- **WHEN** 客户端请求配置接口
+- **THEN** 返回公告标题、内容、类型
 
 ## 实现
 
 - **CenterService**: `center-service` 模块
-- **EnterController**: 入口接口
-- **Redis**: 会话存储
+- **ConfigController**: 配置接口

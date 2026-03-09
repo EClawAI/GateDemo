@@ -1,64 +1,47 @@
 ## Why
 
-当前游戏架构存在以下问题：
+客户端启动时需要获取一些基础配置信息：
+1. **客户端版本**：检查是否需要更新
+2. **SDK地址**：客户端需要知道SDK服务器地址
+3. **Login地址**：客户端需要知道登录服务地址
+4. **公告信息**：游戏公告、维护通知等
 
-1. **客户端获取版本信息困难**：客户端需要知道当前版本才能进行后续操作
-2. **Gate连接信息不透明**：客户端不知道应该连接哪个Gate
-3. **游戏服路由不明确**：客户端不知道应该连接哪个Game
-
-引入CenterService（中心服务）可以解决以上问题：
-- 提供HTTP接口供客户端一次性获取版本、Gate信息和gameId
-- 返回gameId供客户端连接对应的Game服
+这些信息相对稳定，适合统一由CenterService提供。
 
 ## What Changes
 
-1. **新增CenterService**：作为入口服务，提供HTTP接口
-2. **版本检查接口**：返回当前客户端版本和Gate信息
-3. **游戏服路由接口**：返回gameId（新角色返回推荐服，已登录返回上次登录的服）
+1. **新增CenterService**：作为中心配置服务
+2. **版本检查**：返回客户端版本信息
+3. **配置信息**：返回SDK地址、Login地址等
+4. **公告信息**：返回游戏公告
 
 ## Capabilities
 
 ### New Capabilities
 - `capability-center-service`: 中心服务能力
 
-### Modified Capabilities
-- 无
-
 ## Impact
 
 - 影响新增 `center-service` 模块
-- 影响 `gate-service` 新增状态上报
-- 影响 `game-service` 新增登录记录
 
-## 客户端使用流程（优化后）
+## 客户端使用流程
 
 ```
 客户端启动
      ↓
-请求CenterService（一次请求）
+请求CenterService获取配置
      ↓
-返回：版本 + Gate信息 + gameId
-     ↓
-客户端连接Gate → 转发到对应Game
+获取版本 → 版本不匹配提示更新
+获取配置 → 继续请求LoginService
 ```
 
-## 一次请求设计
+## 接口设计
 
-### 请求
+### 配置接口
 
-```
-POST /api/v1/enter
-Content-Type: application/json
+**接口**: `GET /api/v1/config`
 
-{
-  "playerId": 12345,     // 可选，登录后带
-  "token": "xxx",         // 可选，登录后带
-  "deviceId": "xxx"      // 设备ID
-}
-```
-
-### 响应
-
+**响应**:
 ```json
 {
   "code": 0,
@@ -69,22 +52,24 @@ Content-Type: application/json
       "forceUpdate": false,
       "updateUrl": "https://example.com/update"
     },
-    "gate": {
-      "id": "gate-01",
-      "host": "gate1.example.com",
-      "port": 8888
+    "sdk": {
+      "host": "sdk.example.com",
+      "port": 8443
     },
-    "gameId": 1001,
-    "gameHost": "game1.example.com",
-    "gamePort": 9090
+    "login": {
+      "host": "login.example.com",
+      "port": 8081
+    },
+    "announcement": {
+      "title": "欢迎来到游戏",
+      "content": "游戏公告内容",
+      "type": "normal"
+    }
   }
 }
 ```
 
-### 路由逻辑
+## 实现
 
-| 场景 | 返回 |
-|------|------|
-| 未登录（首次） | 推荐服gameId |
-| 已登录，返回登录 | 上次登录的gameId |
-| 上次Game已下线 | 推荐服gameId |
+- **CenterService**: `center-service` 模块
+- **ConfigController**: 配置接口
