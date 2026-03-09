@@ -2,25 +2,33 @@
 
 ## ADDED Requirements
 
+### Requirement: 入口接口
+
+系统 SHALL 提供一次请求获取所有入口信息。
+
+#### Scenario: 客户端请求入口
+- **WHEN** 客户端请求入口接口
+- **THEN** 返回版本信息、Gate信息和gameId
+
 ### Requirement: 版本检查
 
-系统 SHALL 提供版本检查接口，返回当前服务端支持的客户端版本信息。
+系统 SHALL 在入口接口中返回版本信息。
 
-#### Scenario: 客户端请求版本
-- **WHEN** 客户端请求版本检查接口
-- **THEN** 返回当前版本号、最小版本号、是否强制更新等信息
+#### Scenario: 版本检查
+- **WHEN** 客户端请求入口接口
+- **THEN** 返回当前版本号、最小版本号、是否强制更新
 
-### Requirement: Gate列表查询
+### Requirement: Gate信息
 
-系统 SHALL 提供Gate服务器列表接口。
+系统 SHALL 在入口接口中返回Gate服务器信息。
 
-#### Scenario: 获取Gate列表
-- **WHEN** 客户端请求Gate列表
-- **THEN** 返回所有在线Gate的地址和端口
+#### Scenario: Gate信息返回
+- **WHEN** 客户端请求入口接口
+- **THEN** 返回可用Gate的地址和端口
 
 ### Requirement: 游戏服路由
 
-系统 SHALL 提供游戏服路由接口，返回玩家应该连接的gameId。
+系统 SHALL 在入口接口中返回gameId。
 
 #### Scenario: 新角色登录
 - **WHEN** 玩家首次登录游戏
@@ -48,12 +56,10 @@
 
 #### Scenario: Gate上报状态
 - **WHEN** Gate服务定期上报心跳
-- **THEN** 更新Gate在线人数
+- **AND** 更新Gate在线人数
 
 ## 实现
 
 - **CenterService**: `center-service` 模块
-- **VersionController**: 版本接口
-- **GateController**: Gate接口
-- **GameRouteController**: 路由接口
+- **EnterController**: 入口接口
 - **Redis**: 会话存储
