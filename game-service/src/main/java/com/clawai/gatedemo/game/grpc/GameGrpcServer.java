@@ -204,7 +204,8 @@ public class GameGrpcServer {
 
                 @Override
                 public void onError(Throwable t) {
-                    logger.error("❌ Stream通信错误：{}", t.getMessage());
+                    // 客户端取消导致的错误是正常的，不打印error
+                    logger.warn("⚠️ Stream通信断开：{} (客户端可能已断开)", t.getMessage());
                 }
 
                 @Override
@@ -241,7 +242,8 @@ public class GameGrpcServer {
 
                 @Override
                 public void onError(Throwable t) {
-                    logger.error("❌ 心跳流错误：{}", t.getMessage());
+                    // 客户端取消导致的错误是正常的，不打印error
+                    logger.warn("⚠️ 心跳流断开：{} (客户端可能已断开)", t.getMessage());
                 }
 
                 @Override

@@ -388,7 +388,9 @@ public class GameGrpcClientPool {
             
             @Override
             public void onError(Throwable t) {
-                logger.error("❌ Game {} 心跳错误：{}", conn.gameId, t.getMessage());
+                // 心跳流断开可能是由于连接关闭导致的，这是正常情况
+                // 不再打印error日志，避免日志噪音
+                logger.warn("⚠️ Game {} 心跳流断开：{} (可能是连接关闭导致)", conn.gameId, t.getMessage());
             }
             
             @Override
