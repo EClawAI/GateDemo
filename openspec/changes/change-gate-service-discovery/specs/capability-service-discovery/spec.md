@@ -35,11 +35,39 @@
 
 #### Scenario: Game服务新增
 - **WHEN** ZooKeeper收到Game节点新增事件
-- **THEN** 建立与新Game的gRPC连接
+- **THEN** 检查Game是否在负责的分片
+- **AND** 如果是，建立连接；否则忽略
 
 #### Scenario: Game服务下线
 - **WHEN** ZooKeeper收到Game节点删除事件
 - **THEN** 断开与该Game的gRPC连接
+
+### Requirement: 连接数限制
+
+系统 SHALL 限制单个Gate连接的Game数量。
+
+#### Scenario: 连接数达到上限
+- **WHEN** Gate需要连接新Game
+- **AND** 当前连接数已达到上限
+- **THEN** 拒绝建立新连接
+
+### Requirement: 渐进式重连
+
+系统 SHALL 在滚动更新时采用渐进式重连策略。
+
+#### Scenario: 批量重连
+- **WHEN** Gate需要重连多个Game
+- **THEN** 每次最多重连N个（可配置）
+- **AND** 每次重连间隔T秒（可配置）
+
+### Requirement: 分片策略
+
+系统 SHALL 使用一致性哈希分片确定Gate负责的Game。
+
+#### Scenario: 分片计算
+- **WHEN** Gate启动或Game列表变化
+- **THEN** 根据hash(gateId)计算负责的Game分片
+- **AND** 只连接负责范围内的Game
 
 ### Requirement: 服务健康检测
 
@@ -56,11 +84,22 @@
 #### Scenario: 监听Game节点变化
 - **WHEN** Game服务上线/下线
 - **THEN** Gate收到Watch事件通知
-- **AND** 触发连接建立/断开
+- **AND** 触发连接建立/断开（考虑分片）
+
+### Requirement: 本地缓存
+
+系统 SHALL 缓存Game服务列表以减少ZooKeeper压力。
+
+#### Scenario: 使用缓存
+- **WHEN** 需要获取Game列表
+- **THEN** 先从本地缓存获取
+- **AND** 定期刷新缓存
 
 ## 实现
 
-- **ZooKeeper客户端**: 使用Curator或ZooKeeper原生客户端
+- **ZooKeeper客户端**: 使用Curator Framework
 - **服务注册**: `service/ServiceRegistry`
 - **服务发现**: `service/ServiceDiscovery`
+- **分片策略**: `service/ShardingStrategy`
 - **连接管理**: `grpc/GameGrpcClientPool` (修改)
+- **本地缓存**: `service/ServiceCache`
