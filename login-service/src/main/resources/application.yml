@@ -1,0 +1,26 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: login-service
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+login:
+  server:
+    port: 8081
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+  recommend-games:
+    - gameId: 1001
+      name: "推荐服1"
+      priority: 1
+    - gameId: 1002
+      name: "推荐服2"
+      priority: 2

@@ -9,6 +9,7 @@ public class GameConfig {
 
     private String id = "game-1001";
     private Cache cache = new Cache();
+    private LoginService loginService = new LoginService();
 
     public static class Cache {
         private int maxSize = 10000;
@@ -20,8 +21,20 @@ public class GameConfig {
         public void setExpireMinutes(int expireMinutes) { this.expireMinutes = expireMinutes; }
     }
 
+    public static class LoginService {
+        private String host = "localhost";
+        private int port = 8081;
+
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public Cache getCache() { return cache; }
     public void setCache(Cache cache) { this.cache = cache; }
+    public LoginService getLoginService() { return loginService; }
+    public void setLoginService(LoginService loginService) { this.loginService = loginService; }
 }

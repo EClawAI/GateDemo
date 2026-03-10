@@ -67,6 +67,11 @@ public class GateConfig {
     private Player player = new Player();
 
     /**
+     * Login服务配置
+     */
+    private LoginService loginService = new LoginService();
+
+    /**
      * Game 服务实例配置
      */
     public static class GameInstance {
@@ -108,4 +113,22 @@ public class GateConfig {
     public void setGames(List<GameInstance> games) { this.games = games; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player player) { this.player = player; }
+    public LoginService getLoginService() { return loginService; }
+    public void setLoginService(LoginService loginService) { this.loginService = loginService; }
+
+    /**
+     * Login服务配置类
+     */
+    public static class LoginService {
+        private String host = "localhost";
+        private int port = 8081;
+        private int heartbeatInterval = 30;
+
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public int getHeartbeatInterval() { return heartbeatInterval; }
+        public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
+    }
 }
