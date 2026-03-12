@@ -14,7 +14,8 @@ public class GameRouteService {
 
     private static final Logger logger = LoggerFactory.getLogger(GameRouteService.class);
 
-    private static final String PLAYER_LOGIN_KEY_PREFIX = "player:login:";
+    private static final String PLAYER_LASTGAME_KEY_PREFIX = "player:lastgame:";
+    private static final String GAME_STATUS_KEY_PREFIX = "game:status:";
     private static final long PLAYER_LOGIN_EXPIRE_SECONDS = 7 * 24 * 3600;
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -25,6 +26,49 @@ public class GameRouteService {
         this.redisTemplate = redisTemplate;
         this.loginConfig = loginConfig;
         this.gateService = gateService;
+    }
+
+    public enum GameStatus {
+        NOT_STARTED(0),
+        STARTED_NOT_LOGIN(1),
+        STARTED_CAN_LOGIN(2);
+
+        private final int value;
+
+        GameStatus(int value) {
+            this.value = value;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public static GameStatus fromValue(int value) {
+            for (GameStatus status : values()) {
+                if (status.value == value) {
+                    return status;
+                }
+            }
+            return NOT_STARTED;
+        }
+    }
+
+    public GameStatus getGameStatus(Integer gameId) {
+        if (gameId == null) {
+            return GameStatus.NOT_STARTED;
+        }
+        try {
+            String key = GAME_STATUS_KEY_PREFIX + gameId;
+            Object value = redisTemplate.opsForValue().get(key);
+            if (value != null) {
+                String str = value.toString();
+                int status = Integer.parseInt(str.split(":")[0]);
+                return GameStatus.fromValue(status);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get game status: gameId={}, error={}", gameId, e.getMessage());
+        }
+        return GameStatus.NOT_STARTED;
     }
 
     public Integer getRecommendedGame() {
@@ -49,12 +93,13 @@ public class GameRouteService {
     }
 
     public Integer getLastLoginGame(Long playerId) {
-        String key = PLAYER_LOGIN_KEY_PREFIX + playerId;
+        String key = PLAYER_LASTGAME_KEY_PREFIX + playerId;
         Object value = redisTemplate.opsForValue().get(key);
         
         if (value != null) {
             try {
-                return Integer.parseInt(value.toString());
+                String str = value.toString();
+                return Integer.parseInt(str.split(":")[0]);
             } catch (NumberFormatException e) {
                 logger.warn("Invalid player login record: {}", value);
             }
@@ -64,8 +109,9 @@ public class GameRouteService {
     }
 
     public void savePlayerLoginRecord(Long playerId, Integer gameId) {
-        String key = PLAYER_LOGIN_KEY_PREFIX + playerId;
-        redisTemplate.opsForValue().set(key, gameId.toString(), PLAYER_LOGIN_EXPIRE_SECONDS, TimeUnit.SECONDS);
+        String key = PLAYER_LASTGAME_KEY_PREFIX + playerId;
+        String value = gameId + ":" + System.currentTimeMillis();
+        redisTemplate.opsForValue().set(key, value, PLAYER_LOGIN_EXPIRE_SECONDS, TimeUnit.SECONDS);
         logger.info("Player {} login record saved, gameId: {}", playerId, gameId);
     }
 
@@ -76,7 +122,7 @@ public class GameRouteService {
         if (gate == null) {
             logger.warn("No available gate found");
             result.setCode(1);
-            result.setMessage("No available gate");
+            result.setMessage("暂时没有可用的网关服务器");
             return result;
         }
         
@@ -87,23 +133,48 @@ public class GameRouteService {
         Integer lastGameId = getLastLoginGame(playerId);
         
         if (lastGameId != null) {
-            result.setGameId(lastGameId);
-            result.setMessage("Use last login game");
-            logger.info("Player {} routing to last game: {}", playerId, lastGameId);
-        } else {
-            Integer recommendedGameId = getRecommendedGame();
-            if (recommendedGameId != null) {
-                result.setGameId(recommendedGameId);
-                result.setMessage("Use recommended game");
-                logger.info("Player {} routing to recommended game: {}", playerId, recommendedGameId);
+            GameStatus lastGameStatus = getGameStatus(lastGameId);
+            
+            if (lastGameStatus == GameStatus.STARTED_CAN_LOGIN) {
+                savePlayerLoginRecord(playerId, lastGameId);
+                result.setGameId(lastGameId);
+                result.setCode(0);
+                result.setMessage("success");
+                logger.info("Player {} routing to last game: {}", playerId, lastGameId);
+                return result;
             } else {
-                result.setCode(2);
-                result.setMessage("No available game");
-                logger.warn("Player {} no available game", playerId);
+                Integer recommendGameId = getRecommendedGame();
+                if (recommendGameId != null) {
+                    GameStatus recommendStatus = getGameStatus(recommendGameId);
+                    if (recommendStatus == GameStatus.STARTED_CAN_LOGIN) {
+                        savePlayerLoginRecord(playerId, recommendGameId);
+                        result.setGameId(recommendGameId);
+                        result.setCode(0);
+                        result.setRedirect(true);
+                        result.setRedirectMessage("上次登录服务器不可用，已为您切换到推荐服");
+                        logger.info("Player {} redirect to recommended game: {}", playerId, recommendGameId);
+                        return result;
+                    }
+                }
             }
         }
         
-        result.setCode(0);
+        Integer recommendGameId = getRecommendedGame();
+        if (recommendGameId != null) {
+            GameStatus recommendStatus = getGameStatus(recommendGameId);
+            if (recommendStatus == GameStatus.STARTED_CAN_LOGIN) {
+                savePlayerLoginRecord(playerId, recommendGameId);
+                result.setGameId(recommendGameId);
+                result.setCode(0);
+                result.setMessage("success");
+                logger.info("Player {} routing to recommended game: {}", playerId, recommendGameId);
+                return result;
+            }
+        }
+        
+        result.setCode(1);
+        result.setMessage("暂时没有可用的游戏服务器，请稍后重试");
+        logger.warn("Player {} no available game", playerId);
         return result;
     }
 
@@ -114,6 +185,8 @@ public class GameRouteService {
         private String gateHost;
         private Integer gatePort;
         private Integer gameId;
+        private boolean redirect;
+        private String redirectMessage;
 
         public int getCode() {
             return code;
@@ -161,6 +234,22 @@ public class GameRouteService {
 
         public void setGameId(Integer gameId) {
             this.gameId = gameId;
+        }
+
+        public boolean isRedirect() {
+            return redirect;
+        }
+
+        public void setRedirect(boolean redirect) {
+            this.redirect = redirect;
+        }
+
+        public String getRedirectMessage() {
+            return redirectMessage;
+        }
+
+        public void setRedirectMessage(String redirectMessage) {
+            this.redirectMessage = redirectMessage;
         }
     }
 }

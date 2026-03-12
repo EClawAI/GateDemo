@@ -4,11 +4,18 @@ spring:
 
 # Game 服务配置
 game:
-  id: ${GAME_ID:1001}  # Game ID（数字），从启动参数读取
+  id: ${GAME_ID:1001}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:redistest}
+    database: 0
+  status:
+    heartbeat-interval: 30000
 
 # gRPC 服务配置
 grpc:
-  port: ${GRPC_PORT:9090}  # gRPC 服务监听端口，从启动参数读取
+  port: ${GRPC_PORT:9090}
 
 logging:
   level:

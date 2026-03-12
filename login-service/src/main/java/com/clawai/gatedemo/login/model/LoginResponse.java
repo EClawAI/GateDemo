@@ -8,6 +8,8 @@ public class LoginResponse {
     private Integer gameId;
     private String gameHost;
     private Integer gamePort;
+    private Boolean redirect;
+    private String redirectMessage;
 
     @Data
     public static class GateInfo {

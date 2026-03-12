@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: 9086
 
 spring:
   application:
@@ -8,14 +8,16 @@ spring:
     redis:
       host: localhost
       port: 6379
+      password: redistest
       database: 0
 
 login:
   server:
-    port: 8081
+    port: 9086
   redis:
     host: localhost
     port: 6379
+    password: redistest
     database: 0
   recommend-games:
     - gameId: 1001

@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 9085
 
 spring:
   application:
@@ -7,7 +7,7 @@ spring:
 
 center:
   server:
-    port: 8080
+    port: 9085
   version:
     version: 1.0.0
     minVersion: 1.0.0
@@ -18,7 +18,7 @@ center:
     port: 8443
   login:
     host: login.example.com
-    port: 8081
+    port: 9086
   announcements:
     - title: 欢迎来到游戏
       content: 欢迎体验本游戏，祝您游戏愉快！

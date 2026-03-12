@@ -121,7 +121,7 @@ public class GateConfig {
      */
     public static class LoginService {
         private String host = "localhost";
-        private int port = 8081;
+        private int port = 9081;
         private int heartbeatInterval = 30;
 
         public String getHost() { return host; }
