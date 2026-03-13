@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.TimeUnit;
 
@@ -22,27 +23,40 @@ public class GameStatusService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final GameConfig gameConfig;
+    private final GameRegistryService registryService;
 
     private GameStatus currentStatus = GameStatus.NOT_STARTED;
     private int onlinePlayerCount = 0;
     private boolean initialized = false;
 
-    public GameStatusService(RedisTemplate<String, Object> redisTemplate, GameConfig gameConfig) {
+    public GameStatusService(RedisTemplate<String, Object> redisTemplate, 
+                           GameConfig gameConfig,
+                           GameRegistryService registryService) {
         this.redisTemplate = redisTemplate;
         this.gameConfig = gameConfig;
+        this.registryService = registryService;
+    }
+
+    @PostConstruct
+    public void init() {
+        logger.info("GameStatusService initialized, gameId: {}", gameConfig.getId());
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        logger.info("GameStatusService initializing, gameId: {}", gameConfig.getId());
+        logger.info("GameStatusService starting, gameId: {}", gameConfig.getId());
         initialized = true;
         setStatus(GameStatus.STARTED_NOT_LOGIN);
     }
 
     public void setStatus(GameStatus status) {
+        GameStatus oldStatus = this.currentStatus;
         this.currentStatus = status;
         if (initialized) {
             syncStatusToRedis();
+            if (oldStatus != status && registryService != null) {
+                registryService.publishStatusUpdate(oldStatus.getValue(), status.getValue());
+            }
         }
         logger.info("Game status changed to: {} - {}", status.getValue(), status.getDescription());
     }
@@ -65,7 +79,7 @@ public class GameStatusService {
             return;
         }
         try {
-            String key = GAME_STATUS_KEY + gameConfig.getId();
+            String key = GAME_STATUS_KEY + parseGameId(gameConfig.getId());
             String value = String.format("%d:%d:%d",
                 currentStatus.getValue(),
                 onlinePlayerCount,
@@ -83,5 +97,13 @@ public class GameStatusService {
     public void shutdown() {
         logger.info("GameStatusService shutting down, setting status to NOT_STARTED");
         setStatus(GameStatus.NOT_STARTED);
+    }
+
+    private int parseGameId(String id) {
+        try {
+            return Integer.parseInt(id.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 1001;
+        }
     }
 }

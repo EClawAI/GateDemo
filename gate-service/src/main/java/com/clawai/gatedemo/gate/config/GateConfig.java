@@ -6,74 +6,19 @@ import org.springframework.context.annotation.Configuration;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Gate 服务配置类
- * 
- * 功能说明：
- * 从 application.yml 读取配置
- * 
- * 配置项：
- * - gate.id: 网关 ID（如：gate-01）
- * - gate.host: 监听地址（默认：0.0.0.0）
- * - gate.port: WebSocket 端口（默认：8888）
- * - gate.games: Game 服务列表（支持多实例）
- *   - id: Game ID
- *   - host: Game 服务地址
- *   - port: gRPC 端口（默认 9090）
- * - gate.player.heartbeat-interval: 心跳间隔（秒）
- * 
- * @author clawAI
- * @since 2026-03-06
- */
 @Configuration
 @ConfigurationProperties(prefix = "gate")
 public class GateConfig {
 
-    /**
-     * 网关 ID
-     * 用于标识不同的 Gate 实例
-     */
     private String id = "gate-01";
-
-    /**
-     * 监听地址
-     * 0.0.0.0 表示监听所有网卡
-     */
     private String host = "0.0.0.0";
-
-    /**
-     * WebSocket 端口
-     * 玩家通过此端口连接
-     */
     private int port = 8888;
-
-    /**
-     * Game 服务列表（支持多实例）
-     * 配置示例：
-     * gate:
-     *   games:
-     *     - id: 1001
-     *       host: localhost
-     *       port: 9091
-     *     - id: 1002
-     *       host: localhost
-     *       port: 9092
-     */
     private List<GameInstance> games = new ArrayList<>();
-
-    /**
-     * 玩家配置
-     */
     private Player player = new Player();
-
-    /**
-     * Login服务配置
-     */
     private LoginService loginService = new LoginService();
+    private DiscoveryConfig discovery = new DiscoveryConfig();
+    private RedisConfig redis = new RedisConfig();
 
-    /**
-     * Game 服务实例配置
-     */
     public static class GameInstance {
         private int id;
         private String host = "localhost";
@@ -87,21 +32,54 @@ public class GateConfig {
         public void setPort(int port) { this.port = port; }
     }
 
-    /**
-     * 玩家配置类
-     */
     public static class Player {
-        /**
-         * 心跳间隔（秒）
-         * 玩家每隔多久发送一次心跳
-         */
         private int heartbeatInterval = 60;
 
         public int getHeartbeatInterval() { return heartbeatInterval; }
         public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
     }
 
-    // ==================== Getters and Setters ====================
+    public static class LoginService {
+        private String host = "localhost";
+        private int port = 9081;
+        private int heartbeatInterval = 30;
+
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public int getHeartbeatInterval() { return heartbeatInterval; }
+        public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
+    }
+
+    public static class DiscoveryConfig {
+        private boolean enabled = true;
+        private int initialLoadTimeout = 5000;
+        private long staleThreshold = 120000;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getInitialLoadTimeout() { return initialLoadTimeout; }
+        public void setInitialLoadTimeout(int initialLoadTimeout) { this.initialLoadTimeout = initialLoadTimeout; }
+        public long getStaleThreshold() { return staleThreshold; }
+        public void setStaleThreshold(long staleThreshold) { this.staleThreshold = staleThreshold; }
+    }
+
+    public static class RedisConfig {
+        private String host = "localhost";
+        private int port = 6379;
+        private String password = "";
+        private int database = 0;
+
+        public String getHost() { return host; }
+        public void setHost(String host) { this.host = host; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+        public int getDatabase() { return database; }
+        public void setDatabase(int database) { this.database = database; }
+    }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -115,20 +93,8 @@ public class GateConfig {
     public void setPlayer(Player player) { this.player = player; }
     public LoginService getLoginService() { return loginService; }
     public void setLoginService(LoginService loginService) { this.loginService = loginService; }
-
-    /**
-     * Login服务配置类
-     */
-    public static class LoginService {
-        private String host = "localhost";
-        private int port = 9081;
-        private int heartbeatInterval = 30;
-
-        public String getHost() { return host; }
-        public void setHost(String host) { this.host = host; }
-        public int getPort() { return port; }
-        public void setPort(int port) { this.port = port; }
-        public int getHeartbeatInterval() { return heartbeatInterval; }
-        public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
-    }
+    public DiscoveryConfig getDiscovery() { return discovery; }
+    public void setDiscovery(DiscoveryConfig discovery) { this.discovery = discovery; }
+    public RedisConfig getRedis() { return redis; }
+    public void setRedis(RedisConfig redis) { this.redis = redis; }
 }

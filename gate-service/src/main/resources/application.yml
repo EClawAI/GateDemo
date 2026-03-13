@@ -1,5 +1,5 @@
 server:
-  port: 8083
+  port: 9083
 
 spring:
   application:
@@ -9,23 +9,18 @@ gate:
   id: ${GATE_ID:gate-01}
   host: ${GATE_HOST:0.0.0.0}
   port: ${GATE_PORT:8888}
-  # Redis配置
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD:redistest}
-  # Game 服务列表（支持多实例）
-  # 只配置实际运行的 Game 服务，未运行的请注释掉
+  discovery:
+    enabled: true
+    initial-load-timeout: 5000
+    stale-threshold: 120000
   games:
     - id: 1001
       host: ${GAME_1001_HOST:localhost}
-      port: ${GAME_1001_PORT:9091}
-    # - id: 1002  # 暂不启动
-    #   host: ${GAME_1002_HOST:localhost}
-    #   port: ${GAME_1002_PORT:9092}
-    # - id: 1003  # 暂不启动
-    #   host: ${GAME_1003_HOST:localhost}
-    #   port: ${GAME_1003_PORT:9093}
+      port: ${GAME_1001_PORT:9090}
   player:
     heartbeat-interval: 60
 
