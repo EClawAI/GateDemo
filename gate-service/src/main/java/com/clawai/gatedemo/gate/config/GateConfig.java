@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -21,6 +22,25 @@ public class GateConfig {
     private RedisConfig redis = new RedisConfig();
     private HealthConfig health = new HealthConfig();
     private TlsConfig tls = new TlsConfig();
+    private TcpConfig tcp = new TcpConfig();
+    private ClusterConfig cluster = new ClusterConfig();
+
+    public static class TcpConfig {
+        private boolean enabled = false;
+        private int port = 9999;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+    }
+
+    public static class ClusterConfig {
+        private boolean enabled = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
 
     public static class HealthConfig {
         private int port = 8890;
@@ -123,6 +143,7 @@ public class GateConfig {
         private int port = 6379;
         private String password = "";
         private int database = 0;
+        private SentinelConfig sentinel = new SentinelConfig();
 
         public String getHost() { return host; }
         public void setHost(String host) { this.host = host; }
@@ -132,6 +153,24 @@ public class GateConfig {
         public void setPassword(String password) { this.password = password; }
         public int getDatabase() { return database; }
         public void setDatabase(int database) { this.database = database; }
+        public SentinelConfig getSentinel() { return sentinel; }
+        public void setSentinel(SentinelConfig sentinel) { this.sentinel = sentinel; }
+    }
+
+    public static class SentinelConfig {
+        private String master;
+        private List<String> nodes = new ArrayList<>();
+
+        public String getMaster() { return master; }
+        public void setMaster(String master) { this.master = master; }
+        public List<String> getNodes() { return nodes; }
+        public void setNodes(List<String> nodes) { this.nodes = nodes != null ? nodes : new ArrayList<>(); }
+        /** Accept comma-separated host:port for env var injection (e.g. REDIS_SENTINEL_NODES). */
+        public void setNodes(String nodesStr) {
+            if (nodesStr != null && !nodesStr.trim().isEmpty()) {
+                this.nodes = Arrays.stream(nodesStr.split("\\s*,\\s*")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+            }
+        }
     }
 
     public String getId() { return id; }
@@ -156,4 +195,8 @@ public class GateConfig {
     public void setHealth(HealthConfig health) { this.health = health; }
     public TlsConfig getTls() { return tls; }
     public void setTls(TlsConfig tls) { this.tls = tls; }
+    public TcpConfig getTcp() { return tcp; }
+    public void setTcp(TcpConfig tcp) { this.tcp = tcp; }
+    public ClusterConfig getCluster() { return cluster; }
+    public void setCluster(ClusterConfig cluster) { this.cluster = cluster; }
 }

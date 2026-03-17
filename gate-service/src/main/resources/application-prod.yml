@@ -1,7 +1,13 @@
 # Prod profile: TLS enabled, INFO logging, secrets via env vars only
 gate:
   redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD}
+    # Sentinel mode for HA: set REDIS_SENTINEL_MASTER to enable
+    sentinel:
+      master: ${REDIS_SENTINEL_MASTER:}
+      nodes: ${REDIS_SENTINEL_NODES:}
   tls:
     enabled: true
     cert-path: ${TLS_CERT_PATH}

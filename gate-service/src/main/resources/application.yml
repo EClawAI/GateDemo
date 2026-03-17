@@ -17,6 +17,13 @@ gate:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD:redistest}
+    # Sentinel mode: when master is set, use Sentinel instead of standalone
+    # sentinel:
+    #   master: ${REDIS_SENTINEL_MASTER:mymaster}
+    #   nodes:
+    #     - ${REDIS_SENTINEL_NODE1:sentinel1:26379}
+    #     - ${REDIS_SENTINEL_NODE2:sentinel2:26379}
+    #     - ${REDIS_SENTINEL_NODE3:sentinel3:26379}
   discovery:
     enabled: true
     initial-load-timeout: 5000

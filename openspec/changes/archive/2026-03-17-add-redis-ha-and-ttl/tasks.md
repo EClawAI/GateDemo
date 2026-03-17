@@ -1,8 +1,8 @@
 ## 1. Redis Sentinel 配置
 
-- [ ] 1.1 在 RedisConfig 中增加 redis.sentinel.master、redis.sentinel.nodes 等配置项
-- [ ] 1.2 当配置了 Sentinel 时，使用 Lettuce RedisSentinelClient 或等效 API 创建连接
-- [ ] 1.3 未配置 Sentinel 时保持现有单节点连接逻辑
+- [x] 1.1 在 RedisConfig 中增加 redis.sentinel.master、redis.sentinel.nodes 等配置项
+- [x] 1.2 当配置了 Sentinel 时，使用 Lettuce RedisSentinelClient 或等效 API 创建连接
+- [x] 1.3 未配置 Sentinel 时保持现有单节点连接逻辑
 - [ ] 1.4 在 gate-service、game-service、login-service 中统一使用该配置
 
 ## 2. 离线消息 Key TTL
@@ -25,6 +25,6 @@
 
 ## 5. maxmemory 与 eviction 文档
 
-- [ ] 5.1 在运维/部署文档中说明 Redis maxmemory 推荐配置（如物理内存 75%）
-- [ ] 5.2 说明 eviction policy 推荐值（volatile-ttl 或 allkeys-lru）及选择依据
-- [ ] 5.3 提供 redis.conf 或 docker-compose 中的示例配置
+- [x] 5.1 在运维/部署文档中说明 Redis maxmemory 推荐配置（如物理内存 75%）
+- [x] 5.2 说明 eviction policy 推荐值（volatile-ttl 或 allkeys-lru）及选择依据
+- [x] 5.3 提供 redis.conf 或 docker-compose 中的示例配置

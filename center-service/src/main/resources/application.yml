@@ -1,6 +1,12 @@
 server:
   port: 9085
 
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui
+
 spring:
   application:
     name: center-service
