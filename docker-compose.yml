@@ -9,6 +9,79 @@ services:
       - gatedemo
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  center-service:
+    build:
+      context: ./center-service
+      dockerfile: Dockerfile
+    ports:
+      - "9085:9085"
+    environment:
+      - SERVER_PORT=9085
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9085/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    networks:
+      - gatedemo
+
+  login-service:
+    build:
+      context: ./login-service
+      dockerfile: Dockerfile
+    ports:
+      - "9086:9086"
+    environment:
+      - SERVER_PORT=9086
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=
+      - LOGIN_REDIS_HOST=redis
+      - LOGIN_REDIS_PORT=6379
+      - LOGIN_REDIS_PASSWORD=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9086/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - gatedemo
+
+  game-1001:
+    build:
+      context: ./game-service
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
+    environment:
+      - GAME_ID=1001
+      - GRPC_PORT=9090
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:9090"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - gatedemo
 
   gate-01:
     build:
@@ -36,7 +109,7 @@ services:
       game-1001:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     networks:
       - gatedemo
 
@@ -66,28 +139,7 @@ services:
       game-1001:
         condition: service_healthy
       redis:
-        condition: service_started
-    networks:
-      - gatedemo
-
-  game-1001:
-    build:
-      context: ./game-service
-      dockerfile: Dockerfile
-    ports:
-      - "9090:9090"
-    environment:
-      - GAME_ID=1001
-      - GRPC_PORT=9090
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-    healthcheck:
-      test: ["CMD", "/bin/grpc_health_probe", "-addr=:9090"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+        condition: service_healthy
     networks:
       - gatedemo
 
@@ -100,7 +152,8 @@ services:
       - GATE_HOST=gate-01
       - GATE_PORT=8888
     depends_on:
-      - gate-01
+      gate-01:
+        condition: service_healthy
     networks:
       - gatedemo
 

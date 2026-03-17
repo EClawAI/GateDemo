@@ -1,254 +1,242 @@
-# GateDemo - 无状态游戏网关服务演示 (Java 实现) - 无 Redis 版本
+# GateDemo - 无状态游戏网关服务
 
-> 无 Redis 依赖的简化版 Gate 服务架构，Gate 与 Game 直接通过 HTTP 通信
+> 基于 gRPC + Redis 的游戏 Gate 服务架构，支持多 Gate 实例水平扩展、服务发现与离线消息缓存
 
-## 📋 项目说明
-
-本项目演示了无 Redis 依赖的游戏 Gate 服务架构，支持：
-
-- ✅ Gate 服务无状态化
-- ✅ Gate 与 Game 直接 HTTP 通信
-- ✅ Game 服务内存消息缓存
-- ✅ 简化的部署架构（无需 Redis）
-
-## 🏗️ 架构设计
+## 架构概览
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              整体架构（无 Redis）                            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Player ←→ Gate(无状态) ←→ HTTP 直连 → Game(有状态 + 内存缓存)            │
-│                                                                             │
-│   上行：Player → Gate → HTTP POST → Game → 处理                            │
-│   下行：Game → 内存缓存 → (玩家在线时直接推送)                              │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                              GateDemo 整体架构                                    │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   Player(WebSocket) ──→ Gate(无状态) ──gRPC──→ Game(有状态)                      │
+│                              │                     │                             │
+│                              ├── Redis ←───────────┤                             │
+│                              │   (会话/发现/离线消息)                              │
+│                              │                                                   │
+│   Center(配置/版本) ←── HTTP ──── Player(初始化)                                  │
+│   Login(认证/路由)  ←── HTTP ──── Player(登录)                                    │
+│                              │                                                   │
+│   上行：Player → Gate → gRPC Bidirectional Stream → Game → 处理                  │
+│   下行：Game → gRPC Stream → Gate → WebSocket → Player                           │
+│   离线：Game → Redis 离线队列 → 玩家上线时推送                                     │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 📁 项目结构
+## 五服务职责
+
+| 服务 | 端口 | 职责 |
+|------|------|------|
+| **gate-service** | 8888 (WebSocket) / 8890 (Health HTTP) | 无状态网关，管理客户端连接，通过 gRPC 双向流转发消息到 Game |
+| **game-service** | 9090 (gRPC) | 有状态游戏逻辑，处理玩家消息，通过 Redis 注册服务状态 |
+| **login-service** | 9086 (HTTP) | 玩家认证、Token 生成、游戏服推荐与路由 |
+| **center-service** | 9085 (HTTP) | 版本检查、公告下发、SDK 配置 |
+| **player-client** | — | 模拟客户端，WebSocket 连接 Gate 并发送消息 |
+
+## 技术栈
+
+| 组件 | 技术 |
+|------|------|
+| 语言 | Java 17 |
+| Gate 网络 | Netty (WebSocket + 自定义健康检查 HTTP) |
+| 服务间通信 | gRPC (Protobuf, 双向流) |
+| 服务发现 | Redis (Game 心跳注册，Gate 订阅) |
+| 离线消息 | Redis (队列缓存) |
+| 会话管理 | Redis |
+| 连接池 | GameGrpcClientPool (Netty/gRPC ManagedChannel) |
+| 认证/路由 | Spring Boot (login-service, center-service) |
+| 构建 | Maven |
+| 容器 | Docker Compose |
+
+## 项目结构
 
 ```
 GateDemo/
 ├── pom.xml                      # Maven 父 POM
-├── docker-compose.yml           # Docker 编排
-├── gate-service/                # Gate 网关服务 (Spring Boot)
+├── docker-compose.yml           # Docker 编排（5 服务 + Redis）
+├── proto/                       # Protobuf 定义
+│   └── src/main/proto/
+│       └── game_service.proto
+├── gate-service/                # Gate 网关服务 (Netty + gRPC)
+│   ├── Dockerfile
 │   ├── pom.xml
-│   └── src/main/
-│       ├── java/.../gate/
-│       │   ├── GateServiceApplication.java
-│       │   ├── config/          # 配置类
-│       │   ├── handler/        # WebSocket 处理器
-│       │   ├── model/          # 数据模型
-│       │   └── service/        # 业务服务
-│       └── resources/
-│           └── application.yml
-├── game-service/                # Game 游戏服务 (Spring Boot)
+│   └── src/main/java/.../gate/
+│       ├── GateServiceApplication.java
+│       ├── config/              # GateConfig 配置
+│       ├── handler/             # WebSocket 处理器
+│       ├── grpc/                # gRPC 客户端池、心跳管理
+│       ├── health/              # Netty HTTP 健康检查服务
+│       ├── model/               # 数据模型
+│       └── service/             # 业务服务（发现、会话、离线消息）
+├── game-service/                # Game 游戏服务 (gRPC Server)
+│   ├── Dockerfile
 │   ├── pom.xml
-│   └── src/main/
-│       ├── java/.../game/
-│       │   ├── GameServiceApplication.java
-│       │   ├── config/
-│       │   ├── controller/     # REST API
-│       │   ├── model/
-│       │   └── service/
-│       └── resources/
-│           └── application.yml
-└── player-client/               # 玩家客户端 (Spring Boot)
-    ├── pom.xml
-    └── src/main/
-        ├── java/.../client/
-        │   ├── PlayerClientApplication.java
-        │   ├── config/
-        │   └── service/
-        └── resources/
-            └── application.yml
+│   └── src/main/java/.../game/
+│       ├── GameServiceApplication.java
+│       ├── config/              # 配置
+│       ├── grpc/                # gRPC Server + Health Protocol
+│       ├── model/               # 数据模型
+│       └── service/             # 业务服务
+├── login-service/               # 登录认证服务
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/main/java/.../login/
+│       ├── LoginServiceApplication.java
+│       ├── config/              # 配置
+│       ├── controller/          # REST API + 健康检查
+│       └── service/             # 认证与路由
+├── center-service/              # 中心配置服务
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/main/java/.../center/
+│       ├── CenterServiceApplication.java
+│       ├── config/              # 配置
+│       └── controller/          # REST API + 健康检查
+├── player-client/               # 模拟玩家客户端
+│   ├── Dockerfile
+│   ├── pom.xml
+│   └── src/main/java/.../client/
+├── docs/                        # 项目文档
+│   ├── 开发计划清单.md
+│   └── 提案说明文档.md
+└── openspec/                    # Spec-driven 变更管理
 ```
 
-## 🚀 快速开始
+## 快速开始
 
-### 1. 编译项目
+### 前置条件
+
+- JDK 17+
+- Maven 3.8+
+- Docker & Docker Compose
+
+### 方式一：Docker Compose 一键启动
 
 ```bash
+# 编译所有模块
 mvn clean package -DskipTests
-```
 
-### 2. 启动 Game 服务
-
-```bash
-cd game-service
-java -jar target/game-service-1.0.0.jar
-# 或通过 IDE 运行 GameServiceApplication
-```
-
-### 3. 启动 Gate 服务
-
-```bash
-cd gate-service
-java -jar target/gate-service-1.0.0.jar
-# 或通过 IDE 运行 GateServiceApplication
-```
-
-### 4. 启动 Player 客户端
-
-```bash
-cd player-client
-java -jar target/player-client-1.0.0.jar --player.player-id=100001
-```
-
-### 5. 使用 Docker Compose 启动所有服务
-
-```bash
+# 启动全部服务
 docker-compose up --build
 ```
 
-## ⚙️ 配置说明
+启动后服务可用状态：
 
-### Gate 服务配置 (gate-service/src/main/resources/application.yml)
+| 服务 | 地址 | 健康检查 |
+|------|------|----------|
+| Redis | localhost:6379 | `redis-cli ping` |
+| center-service | http://localhost:9085 | http://localhost:9085/health |
+| login-service | http://localhost:9086 | http://localhost:9086/health |
+| game-1001 (gRPC) | localhost:9090 | gRPC Health Protocol |
+| gate-01 (WebSocket) | ws://localhost:8888 | http://localhost:8890/health |
+| gate-02 (WebSocket) | ws://localhost:8889 | http://localhost:8891/health |
 
-```yaml
-server:
-  port: 8080
+### 方式二：本地逐服务启动
 
-gate:
-  id: gate-01
-  host: 0.0.0.0
-  port: 8888
-  game:
-    host: localhost
-    port: 8081
-  player:
-    heartbeat-interval: 60
+```bash
+# 1. 启动 Redis
+docker run -d -p 6379:6379 redis:7-alpine
+
+# 2. 启动 center-service
+cd center-service && mvn spring-boot:run
+
+# 3. 启动 login-service
+cd login-service && mvn spring-boot:run
+
+# 4. 启动 game-service
+cd game-service && java -jar target/game-service-1.0.0.jar
+
+# 5. 启动 gate-service
+cd gate-service && java -jar target/gate-service-1.0.0.jar
+
+# 6. 启动模拟客户端
+cd player-client && java -jar target/player-client-1.0.0.jar --player.player-id=100001
 ```
 
-### Game 服务配置 (game-service/src/main/resources/application.yml)
+## 环境变量
 
-```yaml
-server:
-  port: 8081
+### gate-service
 
-game:
-  id: game-1001
-  cache:
-    max-size: 10000
-    expire-minutes: 30
-```
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `GATE_ID` | gate-01 | Gate 实例标识 |
+| `GATE_PORT` | 8888 | WebSocket 监听端口 |
+| `HEALTH_PORT` | 8890 | 健康检查 HTTP 端口 |
+| `GAME_1001_HOST` | localhost | Game 1001 gRPC 主机 |
+| `GAME_1001_PORT` | 9090 | Game 1001 gRPC 端口 |
+| `REDIS_HOST` | localhost | Redis 主机 |
+| `REDIS_PORT` | 6379 | Redis 端口 |
+| `REDIS_PASSWORD` | redistest | Redis 密码 |
+| `GRPC_KEEP_ALIVE_TIME` | 30 | gRPC Keep-alive 间隔 (秒) |
+| `GRPC_KEEP_ALIVE_TIMEOUT` | 10 | gRPC Keep-alive 超时 (秒) |
+| `GRPC_RECONNECT_DELAY` | 5000 | gRPC 重连延迟 (毫秒) |
+| `GRPC_HEARTBEAT_INTERVAL` | 30000 | gRPC 心跳间隔 (毫秒) |
 
-### Player 客户端配置 (player-client/src/main/resources/application.yml)
+### game-service
 
-```yaml
-player:
-  player-id: 100001
-  host: localhost
-  port: 8888
-  heartbeat-interval: 30
-```
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `GAME_ID` | 1001 | Game 服务标识 |
+| `GRPC_PORT` | 9090 | gRPC 监听端口 |
+| `REDIS_HOST` | localhost | Redis 主机 |
+| `REDIS_PORT` | 6379 | Redis 端口 |
+| `REDIS_PASSWORD` | redistest | Redis 密码 |
 
-## 📊 API 说明
+### login-service
 
-### Game 服务 REST API
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `SERVER_PORT` | 9086 | HTTP 监听端口 |
+| `SPRING_DATA_REDIS_HOST` | localhost | Redis 主机 |
+| `SPRING_DATA_REDIS_PORT` | 6379 | Redis 端口 |
+| `SPRING_DATA_REDIS_PASSWORD` | redistest | Redis 密码 |
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/game/send/{playerId} | 发送测试消息给玩家 |
-| POST | /api/game/send/{playerId}/custom | 发送自定义消息 |
-| GET | /api/game/health | 健康检查 |
+### center-service
 
-### WebSocket 消息协议
+| 变量名 | 默认值 | 说明 |
+|--------|--------|------|
+| `SERVER_PORT` | 9085 | HTTP 监听端口 |
 
-**客户端 → Gate (WebSocket)**
+## 健康检查
+
+| 服务 | 方式 | 端点 | 检查内容 |
+|------|------|------|----------|
+| gate-service | Netty HTTP | `GET /health`, `GET /ready` | Redis 连通性, gRPC 连接池状态 |
+| game-service | gRPC Health Protocol | `grpc_health_probe -addr=:9090` | gRPC 服务可用性 |
+| login-service | Spring MVC | `GET /health` | Redis 连通性 |
+| center-service | Spring MVC | `GET /health` | 服务存活 |
+| Redis | redis-cli | `redis-cli ping` | Redis 进程存活 |
+
+## 消息协议
+
+### 客户端 → Gate (WebSocket)
 
 ```json
-// 认证
 {"type": "auth", "player_id": 100001}
 
-// 心跳
 {"type": "heartbeat", "player_id": 100001}
 
-// 游戏消息
-{"type": "game_msg", "player_id": 100001, "game_id": 1001, "msg_type": "battle.move", "seq": 123, "body": {...}}
+{"type": "game_msg", "player_id": 100001, "game_id": 1001, "msg_type": "battle.move", "seq": 123, "body": {}}
 ```
 
-**Gate → 客户端 (WebSocket)**
+### Gate → 客户端 (WebSocket)
 
 ```json
-// 认证响应
 {"type": "auth_ack", "player_id": 100001, "timestamp": 1234567890}
 
-// 心跳响应
 {"type": "heartbeat_ack", "player_id": 100001, "timestamp": 1234567890}
 
-// 游戏消息
-{"seq": 123, "msg_type": "battle.update", "body": {...}, "timestamp": 1234567890}
+{"seq": 123, "msg_type": "battle.update", "body": {}, "timestamp": 1234567890}
 ```
 
-## 🔧 核心设计
+## 相关文档
 
-### Gate-Game 直接通信
-
-Gate 服务通过 HTTP POST 直接将消息发送到 Game 服务：
-
-```http
-POST http://game-service:8081/api/game/receive
-Content-Type: application/json
-
-{
-  "gateId": "gate-01",
-  "playerId": 100001,
-  "gameId": 1001,
-  "msgType": "battle.move",
-  "seq": 123,
-  "timestamp": 1234567890,
-  "body": {...}
-}
-```
-
-### Game 服务内存消息缓存
-
-Game 服务使用内存缓存玩家消息（ConcurrentHashMap + LinkedBlockingQueue）：
-
-- 每个玩家一个消息队列
-- 队列大小限制：默认 10000 条
-- 过期策略：可配置（默认 30 分钟）
-- 玩家上线时从队列中取出消息推送
-
-## 🧪 测试
-
-### 运行单元测试
-
-```bash
-mvn test
-```
-
-### 运行集成测试
-
-```bash
-mvn verify
-```
-
-## 🎯 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| 框架 | Spring Boot 3.2 |
-| WebSocket | Spring WebSocket |
-| HTTP 通信 | Spring RestClient |
-| 构建 | Maven |
-| Java | JDK 17+ |
-
-## 📝 注意事项
-
-1. **Java 版本**: JDK 17+
-2. **网络要求**: Gate/Game 之间需要低延迟网络
-3. **内存限制**: Game 服务内存缓存消息，注意内存使用
-4. **生产建议**: 考虑添加消息持久化（数据库或本地文件）
-
-## 🔗 相关文档
-
-- [无状态 Gate 服务设计方案](https://github.com/EClawAI/AIPlans/blob/main/docs/gate-service-design.md)
+- [gRPC 连接池设计](GRPC_POOL_README.md)
+- [开发计划清单](docs/开发计划清单.md)
+- [提案说明文档](docs/提案说明文档.md)
 
 ---
 
-**License**: MIT  
-**Author**: clawAI  
-**Version**: 1.0.0 (Java Implementation)
+**License**: MIT
+**Author**: clawAI
