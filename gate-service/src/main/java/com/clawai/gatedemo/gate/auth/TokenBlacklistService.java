@@ -2,7 +2,7 @@ package com.clawai.gatedemo.gate.auth;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
@@ -17,16 +17,16 @@ public class TokenBlacklistService {
     private static final Logger logger = LoggerFactory.getLogger(TokenBlacklistService.class);
     private static final String BLACKLIST_PREFIX = "token:blacklist:";
 
-    private final StringRedisTemplate redisTemplate;
+    private final RedisOperations<String, String> redisOperations;
 
-    public TokenBlacklistService(StringRedisTemplate redisTemplate) {
-        this.redisTemplate = redisTemplate;
+    public TokenBlacklistService(RedisOperations<String, String> redisOperations) {
+        this.redisOperations = redisOperations;
     }
 
     public void addToBlacklist(String jti, long ttlSeconds) {
         if (jti == null) return;
         try {
-            redisTemplate.opsForValue().set(BLACKLIST_PREFIX + jti, "1", ttlSeconds, TimeUnit.SECONDS);
+            redisOperations.opsForValue().set(BLACKLIST_PREFIX + jti, "1", ttlSeconds, TimeUnit.SECONDS);
             logger.info("Token jti={} added to blacklist, ttl={}s", jti, ttlSeconds);
         } catch (Exception e) {
             logger.error("Failed to add token to blacklist: {}", e.getMessage());
@@ -36,7 +36,7 @@ public class TokenBlacklistService {
     public boolean isBlacklisted(String jti) {
         if (jti == null) return false;
         try {
-            return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + jti));
+            return Boolean.TRUE.equals(redisOperations.hasKey(BLACKLIST_PREFIX + jti));
         } catch (Exception e) {
             logger.error("Failed to check blacklist: {}", e.getMessage());
             return false;
