@@ -38,6 +38,17 @@ gate:
     cert-path: ${TLS_CERT_PATH:}
     key-path: ${TLS_KEY_PATH:}
 
+  ratelimit:
+    per-player:
+      max-requests: ${RATELIMIT_PER_PLAYER_MAX:60}
+      window-ms: ${RATELIMIT_PER_PLAYER_WINDOW:60000}
+    global:
+      max-requests: ${RATELIMIT_GLOBAL_MAX:10000}
+      window-ms: ${RATELIMIT_GLOBAL_WINDOW:1000}
+  circuitbreaker:
+    failure-threshold: ${CB_FAILURE_THRESHOLD:5}
+    reset-timeout-ms: ${CB_RESET_TIMEOUT:30000}
+
 offline-message:
   threshold: 200
   enabled: true

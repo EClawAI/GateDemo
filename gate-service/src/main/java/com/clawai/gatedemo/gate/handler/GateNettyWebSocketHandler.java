@@ -2,6 +2,8 @@ package com.clawai.gatedemo.gate.handler;
 
 import com.clawai.gatedemo.gate.auth.TokenValidator;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
+import com.clawai.gatedemo.gate.resilience.CircuitBreaker;
+import com.clawai.gatedemo.gate.resilience.RateLimiter;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.Channel;
@@ -51,12 +53,21 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     private final PlayerService playerService;
     private final ObjectMapper objectMapper;
     private final TokenValidator tokenValidator;
+    private final RateLimiter perPlayerRateLimiter;
+    private final RateLimiter globalRateLimiter;
+    private final CircuitBreaker grpcCircuitBreaker;
 
     public GateNettyWebSocketHandler(PlayerService playerService, ObjectMapper objectMapper,
-                                     TokenValidator tokenValidator) {
+                                     TokenValidator tokenValidator,
+                                     @org.springframework.beans.factory.annotation.Qualifier("perPlayerRateLimiter") RateLimiter perPlayerRateLimiter,
+                                     @org.springframework.beans.factory.annotation.Qualifier("globalRateLimiter") RateLimiter globalRateLimiter,
+                                     CircuitBreaker grpcCircuitBreaker) {
         this.playerService = playerService;
         this.objectMapper = objectMapper;
         this.tokenValidator = tokenValidator;
+        this.perPlayerRateLimiter = perPlayerRateLimiter;
+        this.globalRateLimiter = globalRateLimiter;
+        this.grpcCircuitBreaker = grpcCircuitBreaker;
     }
 
     /**
@@ -92,6 +103,12 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         PlayerMessage message = objectMapper.readValue(text, PlayerMessage.class);
         String type = message.getType();
 
+        // Global rate limit check
+        if (!globalRateLimiter.tryAcquire("global")) {
+            sendError(ctx, "RATE_LIMITED", "Server rate limit exceeded");
+            return;
+        }
+
         Boolean authenticated = ctx.channel().attr(AUTHENTICATED).get();
 
         if (!Boolean.TRUE.equals(authenticated)) {
@@ -102,6 +119,16 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
                 ctx.close();
             }
             return;
+        }
+
+        // Per-player rate limit (heartbeat exempt)
+        if (!"heartbeat".equals(type)) {
+            Long rateLimitPlayerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
+            String key = rateLimitPlayerId != null ? String.valueOf(rateLimitPlayerId) : ctx.channel().id().asShortText();
+            if (!perPlayerRateLimiter.tryAcquire(key)) {
+                sendError(ctx, "RATE_LIMITED", "Too many requests");
+                return;
+            }
         }
 
         if ("heartbeat".equals(type)) {
@@ -170,28 +197,28 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         }
     }
 
-    /**
-     * 处理游戏消息
-     * 
-     * 游戏消息转发流程：
-     * 1. 解析 game_id 和消息内容
-     * 2. 将消息转发到 Game 服务（通过 Redis Stream）
-     * 3. Game 服务处理游戏逻辑
-     * 
-     * @param ctx Channel 上下文
-     * @param message 游戏消息
-     */
     private void handleGameMessage(ChannelHandlerContext ctx, PlayerMessage message) {
-        Long playerId = message.getPlayerId();
+        Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         Integer gameId = message.getGameId();
-        
-        if (playerId != null && gameId != null) {
-            // 转发消息到 Game 服务
+
+        if (playerId == null || gameId == null) {
+            logger.warn("Game message missing playerId or gameId: {}", message);
+            return;
+        }
+
+        if (!grpcCircuitBreaker.allowRequest()) {
+            sendError(ctx, "GAME_UNAVAILABLE", "Game service temporarily unavailable");
+            return;
+        }
+
+        try {
             playerService.forwardToGame(playerId, gameId, message);
-            logger.debug("🎮 游戏消息转发：playerId={}, gameId={}, msgType={}", 
-                playerId, gameId, message.getMsgType());
-        } else {
-            logger.warn("⚠️ 游戏消息缺少 playerId 或 gameId: {}", message);
+            grpcCircuitBreaker.recordSuccess();
+            logger.debug("Game message forwarded: playerId={}, gameId={}, msgType={}", playerId, gameId, message.getMsgType());
+        } catch (Exception e) {
+            grpcCircuitBreaker.recordFailure();
+            sendError(ctx, "GAME_UNAVAILABLE", "Failed to forward to game service");
+            logger.error("Failed to forward game message: {}", e.getMessage());
         }
     }
 
@@ -271,22 +298,20 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
      */
     private void sendToClient(ChannelHandlerContext ctx, PlayerMessage message) {
         try {
-            // 1. 将对象转换为 JSON 字符串
             String json = objectMapper.writeValueAsString(message);
-            
-            // 2. 封装为 WebSocket 文本帧
-            TextWebSocketFrame frame = new TextWebSocketFrame(json);
-            
-            // 3. 发送消息
-            // writeAndFlush = write() + flush()
-            // write() 将消息写入缓冲区
-            // flush() 将缓冲区的数据刷新到网络
-            ctx.writeAndFlush(frame);
-            
-            logger.debug("📤 发送消息：{}", message.getType());
-            
+            ctx.writeAndFlush(new TextWebSocketFrame(json));
         } catch (Exception e) {
-            logger.error("❌ 发送消息失败：{}", e.getMessage());
+            logger.error("Failed to send message: {}", e.getMessage());
+        }
+    }
+
+    private void sendError(ChannelHandlerContext ctx, String code, String message) {
+        try {
+            String json = objectMapper.writeValueAsString(Map.of(
+                    "type", "error", "code", code, "message", message));
+            ctx.writeAndFlush(new TextWebSocketFrame(json));
+        } catch (Exception e) {
+            logger.error("Failed to send error: {}", e.getMessage());
         }
     }
 }
