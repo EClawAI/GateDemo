@@ -30,6 +30,13 @@ public class GameMessageHandler {
     }
 
     /**
+     * 处理游戏消息（无 sink，适用于 unary RPC，echo/broadcast 不生效）
+     */
+    public void handleGameMessage(Long playerId, Integer gameId, String msgType, int seq, com.google.protobuf.ByteString bodyBytes) {
+        handleGameMessage(playerId, gameId, msgType, seq, bodyBytes, null);
+    }
+
+    /**
      * 处理游戏消息
      *
      * @param playerId 玩家 ID
@@ -37,23 +44,29 @@ public class GameMessageHandler {
      * @param msgType 消息类型
      * @param seq 消息序列号
      * @param bodyBytes 消息体（二进制Protobuf数据）
+     * @param sink 可选，用于 echo/broadcast 时发送回 Gate（stream 路径）
      */
-    public void handleGameMessage(Long playerId, Integer gameId, String msgType, int seq, com.google.protobuf.ByteString bodyBytes) {
+    public void handleGameMessage(Long playerId, Integer gameId, String msgType, int seq,
+                                  com.google.protobuf.ByteString bodyBytes, OutgoingMessageSink sink) {
         try {
-            // 将二进制消息体转换为字符串再解析为Map
             String bodyStr = bodyBytes.toStringUtf8();
             Map<String, Object> body = objectMapper.readValue(bodyStr, Map.class);
-            
-            logger.info("🎮 收到游戏消息：playerId={}, gameId={}, msgType={}, seq={}", 
+
+            logger.info("🎮 收到游戏消息：playerId={}, gameId={}, msgType={}, seq={}",
                 playerId, gameId, msgType, seq);
-            
-            // 根据消息类型处理
+
             switch (msgType) {
+                case "echo":
+                    handleEcho(playerId, gameId, seq, body, sink);
+                    break;
+                case "broadcast":
+                    handleBroadcast(playerId, gameId, seq, body, sink);
+                    break;
                 case "battle.move":
-                    handleBattleMove(playerId, gameId, body);
+                    handleBattleMove(playerId, gameId, body, sink);
                     break;
                 case "chat.message":
-                    handleChatMessage(playerId, gameId, body);
+                    handleChatMessage(playerId, gameId, body, sink);
                     break;
                 default:
                     logger.debug("⚠️ 未知消息类型：{}", msgType);
@@ -62,6 +75,26 @@ public class GameMessageHandler {
             logger.error("❌ 处理游戏消息失败：{}", e.getMessage());
             throw new RuntimeException("处理游戏消息失败", e);
         }
+    }
+
+    /** echo: 原样回发给发送者 */
+    private void handleEcho(Long playerId, Integer gameId, int seq, Map<String, Object> body, OutgoingMessageSink sink) {
+        if (sink == null) {
+            logger.debug("echo 消息（无 sink，unary 路径不回发）");
+            return;
+        }
+        sink.emit(playerId != null ? playerId : 0, gameId != null ? gameId : 0, "echo", seq, body);
+        logger.info("📤 echo 回发：playerId={}, gameId={}", playerId, gameId);
+    }
+
+    /** broadcast: 转发给所有在线玩家，playerId=0 表示广播 */
+    private void handleBroadcast(Long playerId, Integer gameId, int seq, Map<String, Object> body, OutgoingMessageSink sink) {
+        if (sink == null) {
+            logger.debug("broadcast 消息（无 sink，unary 路径不广播）");
+            return;
+        }
+        sink.emit(0, gameId != null ? gameId : 0, "broadcast", seq, body);
+        logger.info("📤 broadcast 广播：gameId={}, from playerId={}", gameId, playerId);
     }
 
     /**
@@ -78,26 +111,22 @@ public class GameMessageHandler {
     }
 
     /**
-     * 处理战斗移动消息
-     * 
-     * @param playerId 玩家 ID
-     * @param gameId 游戏 ID
-     * @param body 消息体
+     * 处理战斗移动消息：解析坐标并 broadcast 给同游戏内所有玩家
      */
-    private void handleBattleMove(Long playerId, Integer gameId, Map<String, Object> body) {
+    private void handleBattleMove(Long playerId, Integer gameId, Map<String, Object> body, OutgoingMessageSink sink) {
         logger.info("⚔️ 战斗移动：playerId={}, gameId={}, move={}", playerId, gameId, body);
-        // TODO: 实现战斗逻辑
+        if (sink != null) {
+            sink.emit(0, gameId != null ? gameId : 0, "battle.move", 0, body);
+        }
     }
 
     /**
-     * 处理聊天消息
-     * 
-     * @param playerId 玩家 ID
-     * @param gameId 游戏 ID
-     * @param body 消息体
+     * 处理聊天消息：解析内容并 broadcast 给同游戏内所有玩家
      */
-    private void handleChatMessage(Long playerId, Integer gameId, Map<String, Object> body) {
+    private void handleChatMessage(Long playerId, Integer gameId, Map<String, Object> body, OutgoingMessageSink sink) {
         logger.info("💬 聊天消息：playerId={}, gameId={}, message={}", playerId, gameId, body);
-        // TODO: 实现聊天逻辑
+        if (sink != null) {
+            sink.emit(0, gameId != null ? gameId : 0, "chat.message", 0, body);
+        }
     }
 }

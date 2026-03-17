@@ -121,6 +121,17 @@ public class NettyWebSocketServer {
     }
 
     /**
+     * 停止接受新连接（优雅关闭阶段一）
+     * 关闭 server channel 后不再接受新的 TCP 连接
+     */
+    public void stopAccepting() {
+        if (serverChannel != null && serverChannel.isOpen()) {
+            serverChannel.close();
+            logger.info("WebSocket 服务器已停止接受新连接");
+        }
+    }
+
+    /**
      * 停止服务器 - Spring容器关闭前自动调用
      */
     @PreDestroy

@@ -12,6 +12,8 @@ spring:
       database: 0
 
 login:
+  security:
+    api-key: ${LOGIN_API_KEY:}
   server:
     port: 9086
   redis:

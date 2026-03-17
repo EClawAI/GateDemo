@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.gate.grpc;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.gate.resilience.ExponentialBackoff;
 import com.clawai.gatedemo.grpc.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.ManagedChannel;
@@ -16,6 +17,8 @@ import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -74,6 +77,11 @@ public class GameGrpcClientPool {
      * Value: GrpcConnection（包含 Channel 和 Stub）
      */
     private final Map<Integer, GrpcConnection> connectionPool = new ConcurrentHashMap<>();
+
+    /**
+     * 重连调度器（替代 Thread.sleep）
+     */
+    private volatile ScheduledExecutorService reconnectScheduler;
     
     /**
      * gRPC 连接封装
@@ -92,12 +100,16 @@ public class GameGrpcClientPool {
         
         // 连接状态
         volatile boolean streamConnected = false;
-        
-        GrpcConnection(int gameId, String host, int port, ManagedChannel channel) {
+
+        // 指数退避（每个连接独立）
+        volatile ExponentialBackoff backoff;
+
+        GrpcConnection(int gameId, String host, int port, ManagedChannel channel, ExponentialBackoff backoff) {
             this.gameId = gameId;
             this.host = host;
             this.port = port;
             this.channel = channel;
+            this.backoff = backoff;
             this.blockingStub = GameServiceGrpc.newBlockingStub(channel);
             this.asyncStub = GameServiceGrpc.newStub(channel);
         }
@@ -132,12 +144,18 @@ public class GameGrpcClientPool {
     @PostConstruct
     public void init() {
         logger.info("=== 初始化 gRPC 连接池 ===");
-        
+
+        reconnectScheduler = new ScheduledThreadPoolExecutor(2, r -> {
+            Thread t = new Thread(r, "grpc-reconnect");
+            t.setDaemon(true);
+            return t;
+        });
+
         // 从配置中读取 Game 服务列表
         for (GateConfig.GameInstance game : gateConfig.getGames()) {
             addConnection(game.getId(), game.getHost(), game.getPort());
         }
-        
+
         logger.info("✅ gRPC 连接池初始化完成，连接数：{}", connectionPool.size());
     }
     
@@ -171,9 +189,16 @@ public class GameGrpcClientPool {
         }
 
         ManagedChannel channel = builder.build();
-        
+
+        GateConfig.GrpcPoolConfig poolCfg = gateConfig.getGrpcPool();
+        ExponentialBackoff backoff = new ExponentialBackoff(
+            poolCfg.getReconnectDelay(),
+            poolCfg.getReconnectMaxDelay(),
+            poolCfg.getReconnectMultiplier()
+        );
+
         // 创建连接对象
-        GrpcConnection conn = new GrpcConnection(gameId, host, port, channel);
+        GrpcConnection conn = new GrpcConnection(gameId, host, port, channel, backoff);
         connectionPool.put(gameId, conn);
         
         // 启动Stream连接
@@ -263,27 +288,37 @@ public class GameGrpcClientPool {
         });
         
         conn.streamConnected = true;
+        onReconnectSuccess(conn);
         logger.info("✅ Game {} Stream通信已启动", conn.gameId);
     }
     
     /**
-     * 调度重连
+     * 调度重连（使用指数退避 + ScheduledExecutorService）
      */
     private void scheduleReconnect(GrpcConnection conn) {
-        long delay = gateConfig.getGrpcPool().getReconnectDelay();
-        new Thread(() -> {
-            try {
-                Thread.sleep(delay);
-                logger.info("🔄 尝试重连 Game {}", conn.gameId);
-                
-                // 重新建立Stream连接
-                if (connectionPool.containsKey(conn.gameId)) {
-                    startStreamCommunication(conn);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        ScheduledExecutorService scheduler = reconnectScheduler;
+        if (scheduler == null || scheduler.isShutdown()) {
+            logger.warn("重连调度器已关闭，跳过 Game {} 重连", conn.gameId);
+            return;
+        }
+
+        long delayMs = conn.backoff.getAndAdvance();
+        scheduler.schedule(() -> {
+            if (!connectionPool.containsKey(conn.gameId)) {
+                return;
             }
-        }).start();
+            logger.info("🔄 尝试重连 Game {}（delay={}ms）", conn.gameId, delayMs);
+            startStreamCommunication(conn);
+        }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * 重连成功后重置退避
+     */
+    private void onReconnectSuccess(GrpcConnection conn) {
+        if (conn.backoff != null) {
+            conn.backoff.reset();
+        }
     }
     
     /**
@@ -455,12 +490,25 @@ public class GameGrpcClientPool {
     @PreDestroy
     public void shutdown() {
         logger.info("=== 关闭 gRPC 连接池 ===");
-        
+
+        ScheduledExecutorService scheduler = reconnectScheduler;
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+
         // 关闭所有连接
         for (Integer gameId : connectionPool.keySet()) {
             removeConnection(gameId);
         }
-        
+
         logger.info("✅ gRPC 连接池已关闭");
     }
 }

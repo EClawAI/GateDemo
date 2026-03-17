@@ -3,7 +3,9 @@ package com.clawai.gatedemo.gate.handler;
 import com.clawai.gatedemo.gate.auth.TokenValidator;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.clawai.gatedemo.gate.resilience.CircuitBreaker;
+import com.clawai.gatedemo.gate.resilience.ConnectionLimiter;
 import com.clawai.gatedemo.gate.resilience.RateLimiter;
+import com.clawai.gatedemo.gate.security.MessageValidator;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.channel.Channel;
@@ -49,25 +51,32 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
 
     private static final Logger logger = LoggerFactory.getLogger(GateNettyWebSocketHandler.class);
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
+    private static final AttributeKey<Boolean> CONNECTION_ACQUIRED = AttributeKey.valueOf("connectionAcquired");
 
     private final PlayerService playerService;
     private final ObjectMapper objectMapper;
     private final TokenValidator tokenValidator;
+    private final MessageValidator messageValidator;
     private final RateLimiter perPlayerRateLimiter;
     private final RateLimiter globalRateLimiter;
     private final CircuitBreaker grpcCircuitBreaker;
+    private final ConnectionLimiter connectionLimiter;
 
     public GateNettyWebSocketHandler(PlayerService playerService, ObjectMapper objectMapper,
                                      TokenValidator tokenValidator,
+                                     MessageValidator messageValidator,
                                      @org.springframework.beans.factory.annotation.Qualifier("perPlayerRateLimiter") RateLimiter perPlayerRateLimiter,
                                      @org.springframework.beans.factory.annotation.Qualifier("globalRateLimiter") RateLimiter globalRateLimiter,
-                                     CircuitBreaker grpcCircuitBreaker) {
+                                     CircuitBreaker grpcCircuitBreaker,
+                                     ConnectionLimiter connectionLimiter) {
         this.playerService = playerService;
         this.objectMapper = objectMapper;
         this.tokenValidator = tokenValidator;
+        this.messageValidator = messageValidator;
         this.perPlayerRateLimiter = perPlayerRateLimiter;
         this.globalRateLimiter = globalRateLimiter;
         this.grpcCircuitBreaker = grpcCircuitBreaker;
+        this.connectionLimiter = connectionLimiter;
     }
 
     /**
@@ -81,8 +90,13 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
      */
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
-        logger.info("📡 新连接建立：{}", ctx.channel().remoteAddress());
-        // 不需要调用 super.channelActive(ctx)，因为父类实现为空
+        if (!connectionLimiter.tryAcquire()) {
+            logger.warn("连接数已达上限 {}，拒绝新连接：{}", connectionLimiter.getMaxConnections(), ctx.channel().remoteAddress());
+            ctx.close();
+            return;
+        }
+        ctx.channel().attr(CONNECTION_ACQUIRED).set(true);
+        logger.info("📡 新连接建立：{} (当前连接数: {})", ctx.channel().remoteAddress(), connectionLimiter.getActiveCount());
     }
 
     /**
@@ -101,6 +115,12 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         logger.debug("收到消息：{}", text);
 
         PlayerMessage message = objectMapper.readValue(text, PlayerMessage.class);
+        String validationError = messageValidator.validate(message);
+        if (validationError != null) {
+            sendError(ctx, "INVALID_MESSAGE", validationError);
+            return;
+        }
+
         String type = message.getType();
 
         // Global rate limit check
@@ -259,15 +279,20 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
      */
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        // 释放连接计数（若曾获取过）
+        if (Boolean.TRUE.equals(ctx.channel().attr(CONNECTION_ACQUIRED).get())) {
+            connectionLimiter.release();
+        }
+
         // 获取绑定的 player_id
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
-        
+
         if (playerId != null) {
             // 注销玩家
             playerService.unregisterPlayer(playerId);
             logger.info("👋 玩家 {} 断开连接", playerId);
         }
-        
+
         logger.info("🔌 连接关闭：{}", ctx.channel().remoteAddress());
     }
 

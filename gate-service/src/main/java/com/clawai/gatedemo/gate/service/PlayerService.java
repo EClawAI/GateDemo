@@ -13,7 +13,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -273,7 +275,7 @@ public class PlayerService {
         // 异步转发，不阻塞 Netty IO 线程
         CompletableFuture.runAsync(() -> {
             // 根据 gameId 使用连接池发送消息
-            boolean success = gameGrpcClientPool.sendGameMessage(
+            boolean success = gameGrpcClientPool.sendGameMessageViaStream(
                 gameId,
                 playerId,
                 message.getMsgType() != null ? message.getMsgType() : "unknown",
@@ -296,5 +298,12 @@ public class PlayerService {
      */
     public int getOnlineCount() {
         return players.size();
+    }
+
+    /**
+     * 获取所有在线玩家 ID（用于 broadcast）
+     */
+    public Set<Long> getAllOnlinePlayerIds() {
+        return Collections.unmodifiableSet(players.keySet());
     }
 }

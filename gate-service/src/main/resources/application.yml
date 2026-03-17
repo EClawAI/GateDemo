@@ -9,6 +9,10 @@ gate:
   id: ${GATE_ID:gate-01}
   host: ${GATE_HOST:0.0.0.0}
   port: ${GATE_PORT:8888}
+  max-connections: ${GATE_MAX_CONNECTIONS:10000}
+  shutdown:
+    enabled: ${GATE_GRACEFUL_SHUTDOWN:true}
+    drain-timeout-seconds: ${GATE_SHUTDOWN_DRAIN_TIMEOUT:30}
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
@@ -22,6 +26,8 @@ gate:
     keep-alive-timeout: ${GRPC_KEEP_ALIVE_TIMEOUT:10}
     keep-alive-without-calls: true
     reconnect-delay: ${GRPC_RECONNECT_DELAY:5000}
+    reconnect-max-delay: ${GRPC_RECONNECT_MAX_DELAY:60000}
+    reconnect-multiplier: ${GRPC_RECONNECT_MULTIPLIER:2.0}
     heartbeat-interval: ${GRPC_HEARTBEAT_INTERVAL:30000}
   games:
     - id: 1001
@@ -38,6 +44,13 @@ gate:
     cert-path: ${TLS_CERT_PATH:}
     key-path: ${TLS_KEY_PATH:}
 
+  security:
+    encryption:
+      enabled: ${GATE_ENCRYPTION_ENABLED:false}
+      key: ${GATE_ENCRYPTION_KEY:}
+  message:
+    max-length: ${GATE_MESSAGE_MAX_LENGTH:65536}
+    msg-type-max-length: 64
   ratelimit:
     per-player:
       max-requests: ${RATELIMIT_PER_PLAYER_MAX:60}

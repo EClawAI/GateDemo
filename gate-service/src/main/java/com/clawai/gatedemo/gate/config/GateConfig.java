@@ -98,6 +98,8 @@ public class GateConfig {
         private long keepAliveTimeout = 10;
         private boolean keepAliveWithoutCalls = true;
         private long reconnectDelay = 5000;
+        private long reconnectMaxDelay = 60000;
+        private double reconnectMultiplier = 2.0;
         private int heartbeatInterval = 30000;
 
         public long getKeepAliveTime() { return keepAliveTime; }
@@ -108,6 +110,10 @@ public class GateConfig {
         public void setKeepAliveWithoutCalls(boolean keepAliveWithoutCalls) { this.keepAliveWithoutCalls = keepAliveWithoutCalls; }
         public long getReconnectDelay() { return reconnectDelay; }
         public void setReconnectDelay(long reconnectDelay) { this.reconnectDelay = reconnectDelay; }
+        public long getReconnectMaxDelay() { return reconnectMaxDelay; }
+        public void setReconnectMaxDelay(long reconnectMaxDelay) { this.reconnectMaxDelay = reconnectMaxDelay; }
+        public double getReconnectMultiplier() { return reconnectMultiplier; }
+        public void setReconnectMultiplier(double reconnectMultiplier) { this.reconnectMultiplier = reconnectMultiplier; }
         public int getHeartbeatInterval() { return heartbeatInterval; }
         public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
     }
