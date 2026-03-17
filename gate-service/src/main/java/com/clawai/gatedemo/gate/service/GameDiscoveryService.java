@@ -1,8 +1,7 @@
 package com.clawai.gatedemo.gate.service;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -18,7 +17,6 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,16 +30,18 @@ public class GameDiscoveryService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final RedisMessageListenerContainer listenerContainer;
     private final GateConfig gateConfig;
+    private final GameGrpcClientPool gameGrpcClientPool;
 
     private final Map<Integer, GameInstance> gameMap = new ConcurrentHashMap<>();
-    private final Map<Integer, ManagedChannel> gameChannels = new ConcurrentHashMap<>();
 
     public GameDiscoveryService(RedisTemplate<String, Object> redisTemplate,
                                RedisMessageListenerContainer listenerContainer,
-                               GateConfig gateConfig) {
+                               GateConfig gateConfig,
+                               GameGrpcClientPool gameGrpcClientPool) {
         this.redisTemplate = redisTemplate;
         this.listenerContainer = listenerContainer;
         this.gateConfig = gateConfig;
+        this.gameGrpcClientPool = gameGrpcClientPool;
     }
 
     @PostConstruct
@@ -126,7 +126,7 @@ public class GameDiscoveryService {
                         GameInstance existing = gameMap.get(gameId);
                         if (existing != null) {
                             existing.setStatus(status);
-                            if (status == 2 && !gameChannels.containsKey(gameId)) {
+                            if (status == 2 && !gameGrpcClientPool.hasConnection(gameId)) {
                                 connectToGame(existing);
                             } else if (status != 2) {
                                 disconnectFromGame(gameId);
@@ -190,44 +190,11 @@ public class GameDiscoveryService {
             return;
         }
 
-        if (gameChannels.containsKey(instance.getId())) {
-            return;
-        }
-
-        try {
-            ManagedChannel channel = ManagedChannelBuilder
-                .forAddress(instance.getHost(), instance.getPort())
-                .usePlaintext()
-                .keepAliveTime(30, TimeUnit.SECONDS)
-                .keepAliveTimeout(10, TimeUnit.SECONDS)
-                .build();
-
-            gameChannels.put(instance.getId(), channel);
-            logger.info("Connected to game: gameId={}, host={}, port={}",
-                instance.getId(), instance.getHost(), instance.getPort());
-        } catch (Exception e) {
-            logger.warn("Failed to connect to game {}: {}", instance.getId(), e.getMessage());
-        }
+        gameGrpcClientPool.addConnection(instance.getId(), instance.getHost(), instance.getPort());
     }
 
     private void disconnectFromGame(int gameId) {
-        ManagedChannel channel = gameChannels.remove(gameId);
-        if (channel != null) {
-            channel.shutdown();
-            logger.info("Disconnected from game: gameId={}", gameId);
-        }
-    }
-
-    public ManagedChannel getChannel(int gameId) {
-        ManagedChannel channel = gameChannels.get(gameId);
-        if (channel == null) {
-            GameInstance instance = gameMap.get(gameId);
-            if (instance != null && instance.isAvailable()) {
-                connectToGame(instance);
-                channel = gameChannels.get(gameId);
-            }
-        }
-        return channel;
+        gameGrpcClientPool.removeConnection(gameId);
     }
 
     public List<GameInstance> getAvailableGames() {

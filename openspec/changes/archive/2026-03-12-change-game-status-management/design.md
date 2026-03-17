@@ -113,7 +113,7 @@ public enum GameStatus {
 ### 心跳同步
 
 ```java
-@Scheduled(fixedRateString = "${game.status.heartbeat-interval:30000}")
+// 通过 ScheduledExecutorService 以配置的 heartbeat-interval（默认 30s）周期调度
 public void syncStatus() {
     String value = String.format("%d:%d:%d", 
         status.getValue(), 

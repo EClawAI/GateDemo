@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -155,13 +156,13 @@ public class GameGrpcClientPool {
         
         logger.info("🔗 创建 Game {} 连接：{}:{}", gameId, host, port);
         
-        // 创建 gRPC 通道（长连接）
+        GateConfig.GrpcPoolConfig poolConfig = gateConfig.getGrpcPool();
         ManagedChannel channel = ManagedChannelBuilder
             .forAddress(host, port)
             .usePlaintext()
-            .keepAliveTime(30, TimeUnit.SECONDS)
-            .keepAliveTimeout(10, TimeUnit.SECONDS)
-            .keepAliveWithoutCalls(true)
+            .keepAliveTime(poolConfig.getKeepAliveTime(), TimeUnit.SECONDS)
+            .keepAliveTimeout(poolConfig.getKeepAliveTimeout(), TimeUnit.SECONDS)
+            .keepAliveWithoutCalls(poolConfig.isKeepAliveWithoutCalls())
             .build();
         
         // 创建连接对象
@@ -262,10 +263,10 @@ public class GameGrpcClientPool {
      * 调度重连
      */
     private void scheduleReconnect(GrpcConnection conn) {
-        // 5秒后重连
+        long delay = gateConfig.getGrpcPool().getReconnectDelay();
         new Thread(() -> {
             try {
-                Thread.sleep(5000);
+                Thread.sleep(delay);
                 logger.info("🔄 尝试重连 Game {}", conn.gameId);
                 
                 // 重新建立Stream连接
@@ -420,6 +421,20 @@ public class GameGrpcClientPool {
         }
     }
     
+    /**
+     * 检查指定 gameId 是否已有连接
+     */
+    public boolean hasConnection(int gameId) {
+        return connectionPool.containsKey(gameId);
+    }
+
+    /**
+     * 获取池中所有 gameId
+     */
+    public Set<Integer> getGameIds() {
+        return new java.util.HashSet<>(connectionPool.keySet());
+    }
+
     /**
      * 获取连接池大小
      */

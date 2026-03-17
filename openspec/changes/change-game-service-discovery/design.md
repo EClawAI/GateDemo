@@ -68,7 +68,7 @@ Type: REGISTER | UNREGISTER | UPDATE
 ### 服务注册
 
 ```java
-@Service
+// 服务类，通过 DI 容器或手动注册管理生命周期
 public class GameRegistryService {
 
     private static final String REGISTRY_KEY = "game:registry:";
@@ -95,7 +95,7 @@ public class GameRegistryService {
             "REGISTER:" + gameConfig.getId() + ":" + value);
     }
 
-    @PreDestroy
+    // 通过 JVM shutdown hook 或手动调用触发
     public void unregister() {
         // 删除注册信息
         redisTemplate.delete(REGISTRY_KEY + gameConfig.getId());
@@ -105,7 +105,7 @@ public class GameRegistryService {
             "UNREGISTER:" + gameConfig.getId());
     }
 
-    @Scheduled(fixedRate = 30000)
+    // 通过 ScheduledExecutorService 以 30s 周期调度
     public void heartbeat() {
         // 续期注册信息
         // ... 同register逻辑
@@ -129,7 +129,7 @@ public void setStatus(GameStatus status) {
 ### 服务发现
 
 ```java
-@Service
+// 服务类，通过 DI 容器或手动注册管理生命周期
 public class GameDiscoveryService {
 
     private static final String REGISTRY_KEY = "game:registry:";
@@ -283,13 +283,13 @@ Game关闭 → 手动删除注册信息
 ### 实现细节
 
 ```java
-@Service
+// 服务类，通过 DI 容器或手动注册管理生命周期
 public class GameRegistryService {
 
     private static final long TTL_SECONDS = 60;
     private static final long HEARTBEAT_INTERVAL = 30000; // 30秒
 
-    @Scheduled(fixedRate = HEARTBEAT_INTERVAL)
+    // 通过 ScheduledExecutorService 以 HEARTBEAT_INTERVAL 周期调度
     public void heartbeat() {
         // 使用setNX + expire 或者 直接set + expire
         // 每次设置都刷新TTL，实现续期
@@ -310,7 +310,7 @@ public class GameRegistryService {
 
 ### TTL过期场景
 
-1. **正常关闭**：Game调用`@PreDestroy`主动删除注册信息
+1. **正常关闭**：Game 通过 JVM shutdown hook 主动删除注册信息
 2. **异常退出**：进程崩溃/被杀，无心跳 → TTL过期 → Gate检测到不可用
 3. **网络断开**：网络异常导致心跳失败 → TTL过期
 
@@ -321,12 +321,12 @@ public class GameRegistryService {
 Gate通过以下方式检测Game异常下线：
 
 ```java
-@Service
+// 服务类，通过 DI 容器或手动注册管理生命周期
 public class GameDiscoveryService {
 
     private static final long STALE_THRESHOLD = 120000; // 2分钟
 
-    @Scheduled(fixedRate = 10000)
+    // 通过 ScheduledExecutorService 以 10s 周期调度
     public void checkStaleGames() {
         Set<String> keys = redisTemplate.keys(REGISTRY_KEY + "*");
         

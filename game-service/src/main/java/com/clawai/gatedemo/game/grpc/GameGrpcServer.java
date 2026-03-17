@@ -2,6 +2,8 @@ package com.clawai.gatedemo.game.grpc;
 
 import com.clawai.gatedemo.game.service.GameMessageHandler;
 import com.clawai.gatedemo.grpc.*;
+import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
+import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +59,7 @@ public class GameGrpcServer {
     private int grpcPort;
 
     private io.grpc.Server server;
+    private HealthStatusManager healthManager;
     private final GameMessageHandler gameMessageHandler;
 
     /**
@@ -77,11 +80,15 @@ public class GameGrpcServer {
         logger.info("Game ID: {}", gameId);
         logger.info("监听端口：{}", grpcPort);
 
-        // 创建 gRPC 服务器
+        // 创建 gRPC 服务器（含 Health 服务）
+        healthManager = new HealthStatusManager();
         server = io.grpc.ServerBuilder.forPort(grpcPort)
             .addService(new GameServiceImpl())
+            .addService(healthManager.getHealthService())
             .build()
             .start();
+        healthManager.setStatus("", ServingStatus.SERVING);
+        healthManager.setStatus("game-service", ServingStatus.SERVING);
 
         logger.info("===========================================");
         logger.info("✅ Game gRPC 服务器启动成功！");
@@ -102,6 +109,9 @@ public class GameGrpcServer {
      */
     @PreDestroy
     public void stop() {
+        if (healthManager != null) {
+            healthManager.setStatus("", ServingStatus.NOT_SERVING);
+        }
         if (server != null) {
             try {
                 server.shutdown().awaitTermination(5, TimeUnit.SECONDS);

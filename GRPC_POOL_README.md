@@ -112,6 +112,19 @@ public void forwardToGame(Long playerId, Integer gameId, PlayerMessage message) 
 
 ## 连接管理
 
+### 统一连接池
+
+`GameGrpcClientPool` 是 Gate 与所有 Game 实例通信的**唯一连接组件**。所有 gRPC 连接的创建、复用、销毁均由该池管理。
+
+连接来源有两种，可并存：
+
+| 来源 | 何时生效 | 行为 |
+|------|----------|------|
+| **静态配置**（`gate.games`）| Gate 启动时 | `@PostConstruct` 遍历 `gate.games` 列表调用 `addConnection` |
+| **服务发现**（`gate.discovery.enabled=true`）| 运行时 Redis 事件/轮询 | `GameDiscoveryService` 监听注册/注销事件后调用 `addConnection`/`removeConnection` |
+
+**重叠策略**：当同一 `gameId` 同时在 `gate.games` 和 Discovery 中出现时，以**先到先得**为准 —— `addConnection` 对已有 gameId 直接跳过并打印 WARN 日志，不会创建重复连接也不会覆盖。如需以 Discovery 为唯一来源，可在 `gate.games` 中不配置该 gameId。
+
 ### 自动初始化
 
 Gate 服务启动时，自动从配置读取所有 Game 服务并建立连接：
@@ -128,18 +141,18 @@ public void init() {
 ### 动态添加/移除
 
 ```java
-// 添加新的 Game 服务
+// 添加新的 Game 服务（由 Discovery 或手动调用）
 gameGrpcClientPool.addConnection(1004, "localhost", 9094);
 
 // 移除 Game 服务
 gameGrpcClientPool.removeConnection(1003);
 ```
 
-### 心跳保持
+### 心跳与健康检查
 
-每个连接独立维护双向流心跳：
-- 默认 30 秒 keepalive
-- 自动重连（待实现）
+- `GrpcHeartbeatManager` 遍历池中所有连接（含静态和 Discovery 来源），按配置周期发送心跳。
+- Stream `onError` 时触发 `scheduleReconnect`（可配置延迟），自动重新建立 Stream 连接。
+- 连接被 `removeConnection` 后不再重连；Discovery 再次注册时会重新 `addConnection`。
 
 ## 部署示例
 
@@ -183,15 +196,16 @@ gate:
 2. **一致性哈希**：动态扩缩容
 3. **服务发现**：集成 Nacos/Consul
 
-### 连接池配置（未来）
+### 连接池配置
 
 ```yaml
 gate:
-  grpc:
-    pool:
-      max-connections: 100
-      connect-timeout: 5000
-      idle-timeout: 300000
+  grpc-pool:
+    keep-alive-time: 30          # keepAlive 间隔（秒）
+    keep-alive-timeout: 10       # keepAlive 超时（秒）
+    keep-alive-without-calls: true
+    reconnect-delay: 5000        # Stream 断开后重连延迟（毫秒）
+    heartbeat-interval: 30000    # 心跳发送周期（毫秒）
 ```
 
 ## 监控指标
@@ -221,8 +235,8 @@ Map<Integer, ConnectionStatus> status = gameGrpcClientPool.getConnectionStatus()
 
 ### Game 服务宕机
 
-- ❌ 当前：连接断开，发送失败
-- ✅ 计划：自动重连 + 告警
+- Stream `onError` 触发后，`scheduleReconnect` 自动在配置延迟后重连。
+- 若 Discovery 检测到实例下线，`removeConnection` 会释放连接；实例恢复后 Discovery 重新注册触发 `addConnection`。
 
 ### Gate 服务重启
 

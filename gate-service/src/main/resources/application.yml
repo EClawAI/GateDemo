@@ -17,12 +17,20 @@ gate:
     enabled: true
     initial-load-timeout: 5000
     stale-threshold: 120000
+  grpc-pool:
+    keep-alive-time: ${GRPC_KEEP_ALIVE_TIME:30}
+    keep-alive-timeout: ${GRPC_KEEP_ALIVE_TIMEOUT:10}
+    keep-alive-without-calls: true
+    reconnect-delay: ${GRPC_RECONNECT_DELAY:5000}
+    heartbeat-interval: ${GRPC_HEARTBEAT_INTERVAL:30000}
   games:
     - id: 1001
       host: ${GAME_1001_HOST:localhost}
       port: ${GAME_1001_PORT:9090}
   player:
     heartbeat-interval: 60
+  health:
+    port: ${HEALTH_PORT:8890}
 
 offline-message:
   threshold: 200

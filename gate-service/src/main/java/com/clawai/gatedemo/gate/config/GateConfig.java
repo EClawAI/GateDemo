@@ -17,7 +17,15 @@ public class GateConfig {
     private Player player = new Player();
     private LoginService loginService = new LoginService();
     private DiscoveryConfig discovery = new DiscoveryConfig();
+    private GrpcPoolConfig grpcPool = new GrpcPoolConfig();
     private RedisConfig redis = new RedisConfig();
+    private HealthConfig health = new HealthConfig();
+
+    public static class HealthConfig {
+        private int port = 8890;
+        public int getPort() { return port; }
+        public void setPort(int port) { this.port = port; }
+    }
 
     public static class GameInstance {
         private int id;
@@ -65,6 +73,25 @@ public class GateConfig {
         public void setStaleThreshold(long staleThreshold) { this.staleThreshold = staleThreshold; }
     }
 
+    public static class GrpcPoolConfig {
+        private long keepAliveTime = 30;
+        private long keepAliveTimeout = 10;
+        private boolean keepAliveWithoutCalls = true;
+        private long reconnectDelay = 5000;
+        private int heartbeatInterval = 30000;
+
+        public long getKeepAliveTime() { return keepAliveTime; }
+        public void setKeepAliveTime(long keepAliveTime) { this.keepAliveTime = keepAliveTime; }
+        public long getKeepAliveTimeout() { return keepAliveTimeout; }
+        public void setKeepAliveTimeout(long keepAliveTimeout) { this.keepAliveTimeout = keepAliveTimeout; }
+        public boolean isKeepAliveWithoutCalls() { return keepAliveWithoutCalls; }
+        public void setKeepAliveWithoutCalls(boolean keepAliveWithoutCalls) { this.keepAliveWithoutCalls = keepAliveWithoutCalls; }
+        public long getReconnectDelay() { return reconnectDelay; }
+        public void setReconnectDelay(long reconnectDelay) { this.reconnectDelay = reconnectDelay; }
+        public int getHeartbeatInterval() { return heartbeatInterval; }
+        public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
+    }
+
     public static class RedisConfig {
         private String host = "localhost";
         private int port = 6379;
@@ -95,6 +122,10 @@ public class GateConfig {
     public void setLoginService(LoginService loginService) { this.loginService = loginService; }
     public DiscoveryConfig getDiscovery() { return discovery; }
     public void setDiscovery(DiscoveryConfig discovery) { this.discovery = discovery; }
+    public GrpcPoolConfig getGrpcPool() { return grpcPool; }
+    public void setGrpcPool(GrpcPoolConfig grpcPool) { this.grpcPool = grpcPool; }
     public RedisConfig getRedis() { return redis; }
     public void setRedis(RedisConfig redis) { this.redis = redis; }
+    public HealthConfig getHealth() { return health; }
+    public void setHealth(HealthConfig health) { this.health = health; }
 }

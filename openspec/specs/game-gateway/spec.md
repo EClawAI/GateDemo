@@ -38,10 +38,11 @@
 
 ## 技术栈
 
-- Spring Boot 3.x
+- Java 21
 - Netty 4.x
 - Redis (Lettuce)
 - gRPC
+- Protobuf
 
 ## 配置
 
