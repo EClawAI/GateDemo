@@ -230,6 +230,33 @@ cd player-client && java -jar target/player-client-1.0.0.jar --player.player-id=
 {"seq": 123, "msg_type": "battle.update", "body": {}, "timestamp": 1234567890}
 ```
 
+## CI/CD
+
+项目使用 GitHub Actions 实现持续集成与部署。
+
+### CI（持续集成）
+
+触发条件：PR 或推送到 `main`/`master`/`feature/**` 分支
+
+- Maven 多模块构建与测试 (`mvn clean verify`)
+- JaCoCo 覆盖率报告自动生成并上传为 artifact
+- 测试结果上传为 artifact
+
+### Deploy（持续部署）
+
+触发条件：推送到 `main`/`master` 分支
+
+- 构建通过后，为 gate-service、game-service、login-service、center-service 分别构建 Docker 镜像
+- 镜像推送到 GitHub Container Registry (ghcr.io)
+- 标签：commit SHA + `latest`
+
+### 本地生成覆盖率报告
+
+```bash
+mvn clean verify
+# 报告位于各模块 target/site/jacoco/index.html
+```
+
 ## 相关文档
 
 - [gRPC 连接池设计](GRPC_POOL_README.md)

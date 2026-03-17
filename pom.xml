@@ -33,6 +33,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <grpc.version>1.59.0</grpc.version>
         <protobuf.version>3.24.0</protobuf.version>
+        <jacoco.version>0.8.11</jacoco.version>
     </properties>
 
     <dependencyManagement>
@@ -122,6 +123,28 @@
                 </configuration>
             </plugin>
             
+            <!-- JaCoCo 覆盖率插件 -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Protobuf compiler plugin -->
             <plugin>
                 <groupId>org.xolstice.maven.plugins</groupId>
