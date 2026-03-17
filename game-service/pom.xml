@@ -15,6 +15,12 @@
     <description>无状态游戏服务 - 消息生产者</description>
 
     <dependencies>
+        <!-- Common module (Proto classes, shared DTOs) -->
+        <dependency>
+            <groupId>com.clawai.gatedemo</groupId>
+            <artifactId>common</artifactId>
+        </dependency>
+
         <!-- Spring Boot Starters (仅基础，不包含 Web) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -81,26 +87,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
             
-            <!-- Protobuf compiler plugin -->
-            <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
-                <version>0.6.1</version>
-                <configuration>
-                    <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
-                    <pluginId>grpc-java</pluginId>
-                    <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
-                    <protoSourceRoot>${project.basedir}/../proto</protoSourceRoot>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>compile</goal>
-                            <goal>compile-custom</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+            <!-- Proto compilation moved to common module -->
         </plugins>
     </build>
 </project>

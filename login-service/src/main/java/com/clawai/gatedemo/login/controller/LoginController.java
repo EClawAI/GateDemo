@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.login.controller;
 
+import com.clawai.gatedemo.common.dto.ApiResponse;
 import com.clawai.gatedemo.login.model.*;
 import com.clawai.gatedemo.login.service.GameRouteService;
 import com.clawai.gatedemo.login.service.GateService;

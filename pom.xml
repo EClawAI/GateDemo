@@ -19,6 +19,7 @@
     </parent>
 
     <modules>
+        <module>common</module>
         <module>gate-service</module>
         <module>game-service</module>
         <module>player-client</module>
@@ -39,6 +40,11 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.clawai.gatedemo</groupId>
+                <artifactId>common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.clawai.gatedemo</groupId>
                 <artifactId>gate-service</artifactId>

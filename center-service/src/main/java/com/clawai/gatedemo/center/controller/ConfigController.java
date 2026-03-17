@@ -1,7 +1,7 @@
 package com.clawai.gatedemo.center.controller;
 
 import com.clawai.gatedemo.center.config.CenterConfig;
-import com.clawai.gatedemo.center.model.ApiResponse;
+import com.clawai.gatedemo.common.dto.ApiResponse;
 import com.clawai.gatedemo.center.model.ConfigResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
