@@ -62,6 +62,66 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- Proto doc generation: requires protoc + protoc-gen-doc on PATH.
+                 Install: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+                 Run: mvn -P proto-doc exec:exec@proto-doc
+                 See docs/api-versioning-strategy.md for details. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>proto-doc</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <skip>true</skip>
+                            <executable>protoc</executable>
+                            <arguments>
+                                <argument>--doc_out=${project.basedir}/../docs/proto</argument>
+                                <argument>--doc_opt=html,index.html</argument>
+                                <argument>-I${project.basedir}/../proto</argument>
+                                <argument>${project.basedir}/../proto/game_service.proto</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>proto-doc</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>proto-doc</id>
+                                <phase>generate-resources</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <skip>false</skip>
+                                    <executable>protoc</executable>
+                                    <arguments>
+                                        <argument>--doc_out=${project.basedir}/../docs/proto</argument>
+                                        <argument>--doc_opt=html,index.html</argument>
+                                        <argument>-I${project.basedir}/../proto</argument>
+                                        <argument>${project.basedir}/../proto/game_service.proto</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

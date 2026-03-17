@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gatedemo-config
+  namespace: gatedemo
+  labels:
+    app.kubernetes.io/name: gatedemo
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_HOST: "redis"
+  SPRING_DATA_REDIS_PORT: "6379"
+  LOGIN_REDIS_HOST: "redis"
+  LOGIN_REDIS_PORT: "6379"
+  GAME_1001_HOST: "game-service"
+  GAME_1001_PORT: "9090"

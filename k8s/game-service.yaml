@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-service
+  namespace: gatedemo
+  labels:
+    app: game-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: game-service
+  template:
+    metadata:
+      labels:
+        app: game-service
+    spec:
+      containers:
+        - name: game-service
+          image: ghcr.io/OWNER/game-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9090
+              name: grpc
+          envFrom:
+            - configMapRef:
+                name: gatedemo-config
+          env:
+            - name: GRPC_PORT
+              value: "9090"
+            - name: GAME_ID
+              value: "1001"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            grpc:
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-service
+  namespace: gatedemo
+  labels:
+    app: game-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9090
+      targetPort: 9090
+      name: grpc
+  selector:
+    app: game-service
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: game-service
+  namespace: gatedemo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: game-service
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

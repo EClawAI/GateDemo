@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: center-service
+  namespace: gatedemo
+  labels:
+    app: center-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: center-service
+  template:
+    metadata:
+      labels:
+        app: center-service
+    spec:
+      containers:
+        - name: center-service
+          image: ghcr.io/OWNER/center-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9085
+              name: http
+          envFrom:
+            - configMapRef:
+                name: gatedemo-config
+          env:
+            - name: SERVER_PORT
+              value: "9085"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9085
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9085
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: center-service
+  namespace: gatedemo
+  labels:
+    app: center-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9085
+      targetPort: 9085
+      name: http
+  selector:
+    app: center-service
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: center-service
+  namespace: gatedemo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: center-service
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
