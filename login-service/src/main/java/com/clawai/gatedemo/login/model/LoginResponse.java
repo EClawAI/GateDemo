@@ -10,6 +10,7 @@ public class LoginResponse {
     private Integer gamePort;
     private Boolean redirect;
     private String redirectMessage;
+    private String token;
 
     @Data
     public static class GateInfo {

@@ -1,61 +1,51 @@
 package com.clawai.gatedemo.gate.auth;
 
-import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
-import io.netty.channel.ChannelHandlerContext;
+import io.jsonwebtoken.Claims;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
+/**
+ * Token 验证器：JWT 验签 + Redis 黑名单检查
+ */
+@Component
 public class TokenValidator {
 
     private static final Logger logger = LoggerFactory.getLogger(TokenValidator.class);
 
     private final TokenService tokenService;
+    private final TokenBlacklistService blacklistService;
 
-    public TokenValidator(TokenService tokenService) {
+    public TokenValidator(TokenService tokenService, TokenBlacklistService blacklistService) {
         this.tokenService = tokenService;
+        this.blacklistService = blacklistService;
     }
 
-    public boolean validate(ChannelHandlerContext ctx, WrappedMessage message) {
-        if (message == null || message.getBody() == null) {
-            return false;
-        }
-
-        String token = getTokenFromMessage(message);
-        if (token == null || token.isEmpty()) {
-            logger.warn("No token in message from {}", ctx.channel().remoteAddress());
-            return false;
-        }
-
-        boolean valid = tokenService.validateToken(token);
-        if (!valid) {
-            logger.warn("Invalid token from {}", ctx.channel().remoteAddress());
-        }
-
-        return valid;
-    }
-
-    public Long getPlayerId(ChannelHandlerContext ctx, WrappedMessage message) {
-        if (message == null || message.getBody() == null) {
+    /**
+     * 验证 token 是否有效（JWT 验签 + 黑名单检查）
+     * @return playerId if valid, null if invalid
+     */
+    public Long validate(String token) {
+        if (token == null || token.isBlank()) {
             return null;
         }
 
-        String token = getTokenFromMessage(message);
-        if (token != null) {
-            return tokenService.getPlayerId(token);
+        Claims claims = tokenService.validateToken(token);
+        if (claims == null) {
+            return null;
         }
 
-        return null;
-    }
+        String jti = claims.getId();
+        if (jti != null && blacklistService.isBlacklisted(jti)) {
+            logger.warn("Token is blacklisted: jti={}", jti);
+            return null;
+        }
 
-    private String getTokenFromMessage(WrappedMessage message) {
         try {
-            if (message.getBody() != null && message.getBody().getData() != null) {
-                Object token = message.getBody().getData().get("token");
-                return token != null ? token.toString() : null;
-            }
-        } catch (Exception e) {
-            logger.error("Error getting token from message: {}", e.getMessage());
+            return Long.parseLong(claims.getSubject());
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid subject in token: {}", claims.getSubject());
+            return null;
         }
-        return null;
     }
 }

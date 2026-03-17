@@ -3,6 +3,7 @@ package com.clawai.gatedemo.login.controller;
 import com.clawai.gatedemo.login.model.*;
 import com.clawai.gatedemo.login.service.GameRouteService;
 import com.clawai.gatedemo.login.service.GateService;
+import com.clawai.gatedemo.login.service.JwtTokenService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -15,10 +16,13 @@ public class LoginController {
 
     private final GameRouteService gameRouteService;
     private final GateService gateService;
+    private final JwtTokenService jwtTokenService;
 
-    public LoginController(GameRouteService gameRouteService, GateService gateService) {
+    public LoginController(GameRouteService gameRouteService, GateService gateService,
+                           JwtTokenService jwtTokenService) {
         this.gameRouteService = gameRouteService;
         this.gateService = gateService;
+        this.jwtTokenService = jwtTokenService;
     }
 
     @PostMapping("/login")
@@ -40,6 +44,7 @@ public class LoginController {
         response.setGate(gateInfo);
         
         response.setGameId(result.getGameId());
+        response.setToken(jwtTokenService.generateToken(request.getPlayerId()));
         
         return ApiResponse.success(response);
     }

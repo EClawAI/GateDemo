@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.gate.handler;
 
+import com.clawai.gatedemo.gate.auth.TokenValidator;
 import com.clawai.gatedemo.gate.model.PlayerMessage;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +11,7 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
+import io.netty.util.AttributeKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -44,28 +46,17 @@ import java.util.Map;
 public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
     private static final Logger logger = LoggerFactory.getLogger(GateNettyWebSocketHandler.class);
+    private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
 
-    /**
-     * 玩家服务（由 Spring 自动注入）
-     * 负责玩家注册、消息转发等业务逻辑
-     */
     private final PlayerService playerService;
-
-    /**
-     * JSON 序列化工具（由 Spring 自动注入）
-     * 用于将 Java 对象转换为 JSON 字符串，或反之
-     */
     private final ObjectMapper objectMapper;
+    private final TokenValidator tokenValidator;
 
-    /**
-     * 构造函数，注入依赖
-     * 
-     * @param playerService 玩家服务
-     * @param objectMapper JSON 序列化工具
-     */
-    public GateNettyWebSocketHandler(PlayerService playerService, ObjectMapper objectMapper) {
+    public GateNettyWebSocketHandler(PlayerService playerService, ObjectMapper objectMapper,
+                                     TokenValidator tokenValidator) {
         this.playerService = playerService;
         this.objectMapper = objectMapper;
+        this.tokenValidator = tokenValidator;
     }
 
     /**
@@ -95,86 +86,70 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame frame) throws Exception {
-        // 1. 获取消息文本
         String text = frame.text();
-        logger.debug("📥 收到消息：{}", text);
+        logger.debug("收到消息：{}", text);
 
-        // 2. 解析 JSON 消息
-        // 将 JSON 字符串转换为 PlayerMessage 对象
         PlayerMessage message = objectMapper.readValue(text, PlayerMessage.class);
         String type = message.getType();
 
-        // 3. 根据消息类型处理
-        if ("auth".equals(type)) {
-            // === 认证消息 ===
-            // 玩家发送认证请求，包含 player_id
-            // 示例：{"type": "auth", "player_id": 100001}
-            handleAuth(ctx, message);
-            
-        } else if ("heartbeat".equals(type)) {
-            // === 心跳消息 ===
-            // 玩家定期发送心跳，保持连接活跃
-            // 示例：{"type": "heartbeat", "player_id": 100001}
+        Boolean authenticated = ctx.channel().attr(AUTHENTICATED).get();
+
+        if (!Boolean.TRUE.equals(authenticated)) {
+            if ("auth".equals(type)) {
+                handleAuth(ctx, message);
+            } else {
+                logger.warn("未认证连接发送非认证消息，关闭连接：{}", ctx.channel().remoteAddress());
+                ctx.close();
+            }
+            return;
+        }
+
+        if ("heartbeat".equals(type)) {
             handleHeartbeat(ctx, message);
-            
         } else if ("game_msg".equals(type)) {
-            // === 游戏消息 ===
-            // 玩家发送游戏相关消息（如移动、攻击等）
-            // 示例：{"type": "game_msg", "player_id": 100001, "game_id": 1001, "msg_type": "battle.move", ...}
             handleGameMessage(ctx, message);
-            
         } else {
-            // === 未知消息类型 ===
-            logger.warn("⚠️ 未知消息类型：{} from {}", type, ctx.channel().remoteAddress());
+            logger.warn("未知消息类型：{} from {}", type, ctx.channel().remoteAddress());
         }
     }
 
     /**
-     * 处理认证消息
-     * 
-     * 认证流程：
-     * 1. 解析 player_id
-     * 2. 验证 player_id 是否合法
-     * 3. 将 player_id 与 Channel 绑定
-     * 4. 注册玩家到 PlayerService
-     * 5. 发送认证成功响应
-     * 
-     * @param ctx Channel 上下文
-     * @param message 认证消息
+     * 认证流程：从消息 body 中解析 token，JWT 验签 + 黑名单检查
+     * 客户端消息：{"type": "auth", "body": {"token": "eyJ..."}}
      */
     private void handleAuth(ChannelHandlerContext ctx, PlayerMessage message) {
-        Long playerId = message.getPlayerId();
+        String token = null;
+        if (message.getBody() != null) {
+            Object t = message.getBody().get("token");
+            if (t != null) token = t.toString();
+        }
 
-        // 1. 验证 player_id
-        if (playerId == null || playerId <= 0) {
-            logger.warn("❌ 认证失败：无效的 player_id from {}", ctx.channel().remoteAddress());
-            ctx.close();  // 关闭连接
+        Long playerId = tokenValidator.validate(token);
+        if (playerId == null) {
+            logger.warn("认证失败：无效 token from {}", ctx.channel().remoteAddress());
+            PlayerMessage errResp = new PlayerMessage();
+            errResp.setType("auth_fail");
+            errResp.setTimestamp(System.currentTimeMillis());
+            sendToClient(ctx, errResp);
+            ctx.close();
             return;
         }
 
-        // 2. 检查是否重复登录
         if (playerService.hasPlayer(playerId)) {
-            // 检查旧连接是否活跃
             Channel oldChannel = playerService.getPlayerChannel(playerId);
             if (oldChannel != null && oldChannel.isActive()) {
-                logger.warn("⚠️ 玩家 {} 已登录，关闭新连接", playerId);
-                ctx.close();
-                return;
-            } else {
-                // 旧连接不活跃，先注销
-                logger.info("🔄 玩家 {} 旧连接不活跃，注销并接受新连接", playerId);
-                playerService.unregisterPlayer(playerId);
+                logger.warn("玩家 {} 已登录，关闭旧连接", playerId);
+                oldChannel.close();
             }
+            playerService.unregisterPlayer(playerId);
         }
 
-        // 3. 将 player_id 绑定到 Channel
         ctx.channel().attr(PlayerService.PLAYER_ID_KEY).set(playerId);
+        ctx.channel().attr(AUTHENTICATED).set(true);
 
-        // 4. 注册玩家
         playerService.registerPlayer(playerId, ctx.channel());
-        logger.info("✅ 玩家 {} 认证成功", playerId);
+        logger.info("玩家 {} 认证成功 (JWT)", playerId);
 
-        // 5. 发送认证成功响应
         PlayerMessage response = new PlayerMessage();
         response.setType("auth_ack");
         response.setPlayerId(playerId);
@@ -182,33 +157,16 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         sendToClient(ctx, response);
     }
 
-    /**
-     * 处理心跳消息
-     * 
-     * 心跳作用：
-     * 1. 保持连接活跃，避免被防火墙或路由器断开
-     * 2. 检测玩家是否在线
-     * 3. 续期 Player-Gate 映射的 TTL
-     * 
-     * @param ctx Channel 上下文
-     * @param message 心跳消息
-     */
     private void handleHeartbeat(ChannelHandlerContext ctx, PlayerMessage message) {
-        Long playerId = message.getPlayerId();
-        
+        Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId != null) {
-            // 1. 续期心跳
             playerService.renewHeartbeat(playerId);
-            
-            // 2. 发送心跳响应
-            // 示例：{"type": "heartbeat_ack", "player_id": 100001, "timestamp": 1234567890}
             PlayerMessage response = new PlayerMessage();
             response.setType("heartbeat_ack");
             response.setPlayerId(playerId);
             response.setTimestamp(System.currentTimeMillis());
             sendToClient(ctx, response);
-            
-            logger.debug("💓 玩家 {} 心跳续期", playerId);
+            logger.debug("玩家 {} 心跳续期", playerId);
         }
     }
 

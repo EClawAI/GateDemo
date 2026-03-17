@@ -31,6 +31,8 @@ gate:
     heartbeat-interval: 60
   health:
     port: ${HEALTH_PORT:8890}
+  jwt:
+    secret: ${JWT_SECRET:DefaultGateDemoSecretKeyForHMACSHA256Auth!}
 
 offline-message:
   threshold: 200
