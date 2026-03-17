@@ -16,6 +16,10 @@ game:
 # gRPC 服务配置
 grpc:
   port: ${GRPC_PORT:9090}
+  tls:
+    enabled: ${TLS_ENABLED:false}
+    cert-path: ${TLS_CERT_PATH:}
+    key-path: ${TLS_KEY_PATH:}
 
 logging:
   level:

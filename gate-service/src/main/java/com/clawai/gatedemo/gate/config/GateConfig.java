@@ -20,11 +20,31 @@ public class GateConfig {
     private GrpcPoolConfig grpcPool = new GrpcPoolConfig();
     private RedisConfig redis = new RedisConfig();
     private HealthConfig health = new HealthConfig();
+    private TlsConfig tls = new TlsConfig();
 
     public static class HealthConfig {
         private int port = 8890;
         public int getPort() { return port; }
         public void setPort(int port) { this.port = port; }
+    }
+
+    public static class TlsConfig {
+        private boolean enabled = false;
+        private String certPath;
+        private String keyPath;
+        private String keystorePath;
+        private String keystorePassword;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getCertPath() { return certPath; }
+        public void setCertPath(String certPath) { this.certPath = certPath; }
+        public String getKeyPath() { return keyPath; }
+        public void setKeyPath(String keyPath) { this.keyPath = keyPath; }
+        public String getKeystorePath() { return keystorePath; }
+        public void setKeystorePath(String keystorePath) { this.keystorePath = keystorePath; }
+        public String getKeystorePassword() { return keystorePassword; }
+        public void setKeystorePassword(String keystorePassword) { this.keystorePassword = keystorePassword; }
     }
 
     public static class GameInstance {
@@ -128,4 +148,6 @@ public class GateConfig {
     public void setRedis(RedisConfig redis) { this.redis = redis; }
     public HealthConfig getHealth() { return health; }
     public void setHealth(HealthConfig health) { this.health = health; }
+    public TlsConfig getTls() { return tls; }
+    public void setTls(TlsConfig tls) { this.tls = tls; }
 }

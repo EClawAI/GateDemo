@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -58,6 +59,15 @@ public class GameGrpcServer {
     @Value("${grpc.port:9090}")
     private int grpcPort;
 
+    @Value("${grpc.tls.enabled:false}")
+    private boolean tlsEnabled;
+
+    @Value("${grpc.tls.cert-path:}")
+    private String tlsCertPath;
+
+    @Value("${grpc.tls.key-path:}")
+    private String tlsKeyPath;
+
     private io.grpc.Server server;
     private HealthStatusManager healthManager;
     private final GameMessageHandler gameMessageHandler;
@@ -80,13 +90,18 @@ public class GameGrpcServer {
         logger.info("Game ID: {}", gameId);
         logger.info("监听端口：{}", grpcPort);
 
-        // 创建 gRPC 服务器（含 Health 服务）
         healthManager = new HealthStatusManager();
-        server = io.grpc.ServerBuilder.forPort(grpcPort)
+        io.grpc.ServerBuilder<?> builder = io.grpc.ServerBuilder.forPort(grpcPort)
             .addService(new GameServiceImpl())
-            .addService(healthManager.getHealthService())
-            .build()
-            .start();
+            .addService(healthManager.getHealthService());
+
+        if (tlsEnabled && tlsCertPath != null && !tlsCertPath.isBlank()
+                && tlsKeyPath != null && !tlsKeyPath.isBlank()) {
+            builder.useTransportSecurity(new File(tlsCertPath), new File(tlsKeyPath));
+            logger.info("gRPC TLS enabled: cert={}, key={}", tlsCertPath, tlsKeyPath);
+        }
+
+        server = builder.build().start();
         healthManager.setStatus("", ServingStatus.SERVING);
         healthManager.setStatus("game-service", ServingStatus.SERVING);
 

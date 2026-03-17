@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.gate.ws;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.gate.config.TlsSslContextFactory;
 import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -10,6 +11,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.ssl.SslContext;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
@@ -53,6 +55,9 @@ public class NettyWebSocketServer {
     /** Netty 服务器 Channel */
     private Channel serverChannel;
 
+    /** TLS context (null when TLS disabled) */
+    private SslContext sslContext;
+
     /**
      * 构造函数 - Spring自动注入依赖
      */
@@ -66,19 +71,21 @@ public class NettyWebSocketServer {
      */
     @PostConstruct
     public void start() {
-        logger.info("=== 开始启动 Netty WebSocket 服务器 ===");
-        logger.info("监听端口：{}", gateConfig.getPort());
+        logger.info("Starting Netty WebSocket server on port {}", gateConfig.getPort());
 
-        // 1. 创建 Boss 线程组
+        if (gateConfig.getTls().isEnabled()) {
+            try {
+                sslContext = TlsSslContextFactory.buildServerContext(gateConfig.getTls());
+                logger.info("TLS enabled for WebSocket (wss://)");
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to initialize TLS for WebSocket", e);
+            }
+        }
+
         bossGroup = new NioEventLoopGroup(1);
-        logger.info("Boss 线程组已创建，线程数：1");
-
-        // 2. 创建 Worker 线程组
         workerGroup = new NioEventLoopGroup();
-        logger.info("Worker 线程组已创建");
 
         try {
-            // 3. 创建和配置服务器
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap
                 .group(bossGroup, workerGroup)
@@ -87,32 +94,29 @@ public class NettyWebSocketServer {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ChannelPipeline pipeline = ch.pipeline();
+                        if (sslContext != null) {
+                            pipeline.addLast("ssl", sslContext.newHandler(ch.alloc()));
+                        }
                         pipeline.addLast("httpCodec", new HttpServerCodec());
                         pipeline.addLast("chunkedWriter", new ChunkedWriteHandler());
                         pipeline.addLast("httpAggregator", new HttpObjectAggregator(8192));
                         pipeline.addLast("wsProtocol", new WebSocketServerProtocolHandler("/ws"));
                         pipeline.addLast("idleState", new IdleStateHandler(300, 0, 0, TimeUnit.SECONDS));
                         pipeline.addLast("businessHandler", gateWebSocketHandler);
-                        logger.info("新连接 Pipeline 初始化完成：{}", ch.remoteAddress());
                     }
                 })
                 .option(ChannelOption.SO_BACKLOG, 128)
                 .childOption(ChannelOption.SO_KEEPALIVE, true);
 
-            // 4. 绑定端口并启动
             ChannelFuture future = bootstrap.bind(gateConfig.getPort()).sync();
             serverChannel = future.channel();
 
-            logger.info("===========================================");
-            logger.info("✅ Netty WebSocket 服务器启动成功！");
-            logger.info("监听地址：0.0.0.0:{}", gateConfig.getPort());
-            logger.info("WebSocket 路径：/ws");
-            logger.info("完整地址：ws://localhost:{}/ws", gateConfig.getPort());
-            logger.info("===========================================");
+            String scheme = sslContext != null ? "wss" : "ws";
+            logger.info("WebSocket server started: {}://0.0.0.0:{}/ws", scheme, gateConfig.getPort());
 
         } catch (Exception e) {
-            logger.error("❌ Netty WebSocket 服务器启动失败：{}", e.getMessage(), e);
-            throw new RuntimeException("Netty WebSocket 服务器启动失败", e);
+            logger.error("Failed to start WebSocket server: {}", e.getMessage(), e);
+            throw new RuntimeException("WebSocket server start failed", e);
         }
     }
 

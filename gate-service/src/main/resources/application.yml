@@ -33,6 +33,10 @@ gate:
     port: ${HEALTH_PORT:8890}
   jwt:
     secret: ${JWT_SECRET:DefaultGateDemoSecretKeyForHMACSHA256Auth!}
+  tls:
+    enabled: ${TLS_ENABLED:false}
+    cert-path: ${TLS_CERT_PATH:}
+    key-path: ${TLS_KEY_PATH:}
 
 offline-message:
   threshold: 200

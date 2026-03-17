@@ -157,13 +157,20 @@ public class GameGrpcClientPool {
         logger.info("🔗 创建 Game {} 连接：{}:{}", gameId, host, port);
         
         GateConfig.GrpcPoolConfig poolConfig = gateConfig.getGrpcPool();
-        ManagedChannel channel = ManagedChannelBuilder
+        ManagedChannelBuilder<?> builder = ManagedChannelBuilder
             .forAddress(host, port)
-            .usePlaintext()
             .keepAliveTime(poolConfig.getKeepAliveTime(), TimeUnit.SECONDS)
             .keepAliveTimeout(poolConfig.getKeepAliveTimeout(), TimeUnit.SECONDS)
-            .keepAliveWithoutCalls(poolConfig.isKeepAliveWithoutCalls())
-            .build();
+            .keepAliveWithoutCalls(poolConfig.isKeepAliveWithoutCalls());
+
+        if (gateConfig.getTls().isEnabled()) {
+            builder.useTransportSecurity();
+            logger.info("gRPC TLS enabled for game {}", gameId);
+        } else {
+            builder.usePlaintext();
+        }
+
+        ManagedChannel channel = builder.build();
         
         // 创建连接对象
         GrpcConnection conn = new GrpcConnection(gameId, host, port, channel);
