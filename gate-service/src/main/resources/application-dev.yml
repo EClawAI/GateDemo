@@ -1,0 +1,13 @@
+# Dev profile: local defaults, TLS off, debug logging
+gate:
+  redis:
+    password: redistest
+  tls:
+    enabled: false
+  jwt:
+    secret: ${JWT_SECRET:DefaultGateDemoSecretKeyForHMACSHA256Auth!}
+
+logging:
+  level:
+    com.clawai.gatedemo: DEBUG
+    org.springframework.web.socket: DEBUG

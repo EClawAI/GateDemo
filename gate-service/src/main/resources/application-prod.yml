@@ -1,0 +1,15 @@
+# Prod profile: TLS enabled, INFO logging, secrets via env vars only
+gate:
+  redis:
+    password: ${REDIS_PASSWORD}
+  tls:
+    enabled: true
+    cert-path: ${TLS_CERT_PATH}
+    key-path: ${TLS_KEY_PATH}
+  jwt:
+    secret: ${JWT_SECRET}
+
+logging:
+  level:
+    com.clawai.gatedemo: INFO
+    org.springframework.web.socket: INFO

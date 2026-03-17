@@ -36,6 +36,9 @@
         <protobuf.version>3.24.0</protobuf.version>
         <jacoco.version>0.8.11</jacoco.version>
         <jjwt.version>0.12.5</jjwt.version>
+        <micrometer.version>1.12.2</micrometer.version>
+        <micrometer-tracing.version>1.2.1</micrometer-tracing.version>
+        <opentelemetry.version>1.35.0</opentelemetry.version>
     </properties>
 
     <dependencyManagement>
@@ -113,6 +116,35 @@
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-jackson</artifactId>
                 <version>${jjwt.version}</version>
+            </dependency>
+
+            <!-- Micrometer + Prometheus -->
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-core</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-registry-prometheus</artifactId>
+                <version>${micrometer.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>micrometer-tracing-bridge-otel</artifactId>
+                <version>${micrometer-tracing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-exporter-zipkin</artifactId>
+                <version>${opentelemetry.version}</version>
+            </dependency>
+
+            <!-- Logstash logback encoder for JSON logging -->
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>8.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

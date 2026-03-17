@@ -1,0 +1,14 @@
+# Prod profile: TLS enabled, INFO logging, secrets via env vars only
+game:
+  redis:
+    password: ${REDIS_PASSWORD}
+
+grpc:
+  tls:
+    enabled: true
+    cert-path: ${TLS_CERT_PATH}
+    key-path: ${TLS_KEY_PATH}
+
+logging:
+  level:
+    com.clawai.gatedemo: INFO

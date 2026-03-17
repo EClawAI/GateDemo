@@ -1,0 +1,12 @@
+# Dev profile: local defaults, TLS off, debug logging
+game:
+  redis:
+    password: redistest
+
+grpc:
+  tls:
+    enabled: false
+
+logging:
+  level:
+    com.clawai.gatedemo: DEBUG

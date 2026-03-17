@@ -1,13 +1,13 @@
 ## 1. Micrometer + Prometheus 指标暴露
 
-- [ ] 1.1 添加 micrometer-core、micrometer-registry-prometheus 依赖到 gate-service
-- [ ] 1.2 在 gate-service 启动时初始化 PrometheusMeterRegistry
-- [ ] 1.3 在 Netty 健康端口（或独立 metrics 端口）增加 GET `/metrics` 路由，调用 registry.scrape() 并返回 Prometheus 文本格式
-- [ ] 1.4 配置 Content-Type: text/plain；支持 Prometheus 拉取
+- [x] 1.1 添加 micrometer-core、micrometer-registry-prometheus 依赖到 gate-service
+- [x] 1.2 在 gate-service 启动时初始化 PrometheusMeterRegistry
+- [x] 1.3 在 Netty 健康端口（或独立 metrics 端口）增加 GET `/metrics` 路由，调用 registry.scrape() 并返回 Prometheus 文本格式
+- [x] 1.4 配置 Content-Type: text/plain；支持 Prometheus 拉取
 
 ## 2. OpenTelemetry + Zipkin + gRPC Interceptor
 
-- [ ] 2.1 添加 OpenTelemetry Java SDK、opentelemetry-exporter-zipkin、opentelemetry-api 等依赖到 gate-service、game-service
+- [x] 2.1 添加 OpenTelemetry Java SDK、opentelemetry-exporter-zipkin、opentelemetry-api 等依赖到 gate-service、game-service
 - [ ] 2.2 实现 gRPC Client Interceptor：从 Context 提取 SpanContext，注入 traceparent 到 gRPC metadata
 - [ ] 2.3 实现 gRPC Server Interceptor：从 gRPC metadata 提取 traceparent，创建/延续 Span
 - [ ] 2.4 配置 Zipkin Exporter endpoint（可通过配置项，如 otel.exporter.zipkin.endpoint）；应用启动时初始化 TracerProvider 与 Exporter
@@ -15,11 +15,11 @@
 
 ## 3. logback 多环境配置
 
-- [ ] 3.1 添加 logstash-logback-encoder 依赖
-- [ ] 3.2 创建或更新 logback.xml，通过系统属性（如 env）区分 prod/dev
-- [ ] 3.3 prod：配置 JsonLayout 或 LogstashEncoder，输出包含 traceId、spanId 的 JSON
-- [ ] 3.4 dev：配置 PatternLayout，保持可读文本格式
-- [ ] 3.5 确保 MDC 中的 traceId、spanId 在 pattern 或 JSON 中输出
+- [x] 3.1 添加 logstash-logback-encoder 依赖
+- [x] 3.2 创建或更新 logback.xml，通过系统属性（如 env）区分 prod/dev
+- [x] 3.3 prod：配置 JsonLayout 或 LogstashEncoder，输出包含 traceId、spanId 的 JSON
+- [x] 3.4 dev：配置 PatternLayout，保持可读文本格式
+- [x] 3.5 确保 MDC 中的 traceId、spanId 在 pattern 或 JSON 中输出
 
 ## 4. MetricsCollector 迁移
 

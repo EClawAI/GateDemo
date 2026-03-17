@@ -3,6 +3,7 @@ package com.clawai.gatedemo.gate.health;
 import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -45,17 +46,20 @@ public class HealthCheckHttpServer {
     private final RedisTemplate<String, Object> redisTemplate;
     private final GameGrpcClientPool grpcPool;
     private final ObjectMapper objectMapper;
+    private final PrometheusMeterRegistry prometheusMeterRegistry;
 
     private NioEventLoopGroup bossGroup;
     private NioEventLoopGroup workerGroup;
     private Channel channel;
 
     public HealthCheckHttpServer(GateConfig gateConfig, RedisTemplate<String, Object> redisTemplate,
-                                  GameGrpcClientPool grpcPool, ObjectMapper objectMapper) {
+                                  GameGrpcClientPool grpcPool, ObjectMapper objectMapper,
+                                  PrometheusMeterRegistry prometheusMeterRegistry) {
         this.gateConfig = gateConfig;
         this.redisTemplate = redisTemplate;
         this.grpcPool = grpcPool;
         this.objectMapper = objectMapper;
+        this.prometheusMeterRegistry = prometheusMeterRegistry;
     }
 
     @PostConstruct
@@ -74,7 +78,7 @@ public class HealthCheckHttpServer {
                             ChannelPipeline p = ch.pipeline();
                             p.addLast(new HttpServerCodec());
                             p.addLast(new HttpObjectAggregator(8192));
-                            p.addLast(new HealthCheckHandler());
+                            p.addLast(new HealthCheckHandler(prometheusMeterRegistry));
                         }
                     });
 
@@ -149,9 +153,27 @@ public class HealthCheckHttpServer {
 
     private class HealthCheckHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
+        private final PrometheusMeterRegistry prometheusMeterRegistry;
+
+        HealthCheckHandler(PrometheusMeterRegistry prometheusMeterRegistry) {
+            this.prometheusMeterRegistry = prometheusMeterRegistry;
+        }
+
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
             String path = req.uri().split("\\?")[0];
+
+            if ("/metrics".equals(path) || "/metrics/".equals(path)) {
+                String scrape = prometheusMeterRegistry.scrape();
+                byte[] body = scrape.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8");
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.length);
+                response.content().writeBytes(body);
+                ctx.writeAndFlush(response);
+                return;
+            }
+
             Map<String, Object> health = computeHealth();
             boolean ready = "UP".equals(health.get("status"));
 

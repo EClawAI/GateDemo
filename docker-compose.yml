@@ -23,6 +23,7 @@ services:
     ports:
       - "9085:9085"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - SERVER_PORT=9085
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9085/health"]
@@ -40,6 +41,7 @@ services:
     ports:
       - "9086:9086"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - SERVER_PORT=9086
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_DATA_REDIS_PORT=6379
@@ -67,6 +69,7 @@ services:
     ports:
       - "9090:9090"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - GAME_ID=1001
       - GRPC_PORT=9090
       - REDIS_HOST=redis
@@ -92,6 +95,7 @@ services:
       - "8888:8888"
       - "8890:8890"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - GATE_ID=gate-01
       - GATE_PORT=8888
       - HEALTH_PORT=8890
@@ -123,6 +127,7 @@ services:
       - "8889:8888"
       - "8891:8890"
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - GATE_ID=gate-02
       - GATE_PORT=8888
       - HEALTH_PORT=8890

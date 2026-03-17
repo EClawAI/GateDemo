@@ -49,6 +49,16 @@ gate:
     failure-threshold: ${CB_FAILURE_THRESHOLD:5}
     reset-timeout-ms: ${CB_RESET_TIMEOUT:30000}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
 offline-message:
   threshold: 200
   enabled: true
