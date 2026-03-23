@@ -44,23 +44,4 @@ public class TokenService {
         return null;
     }
 
-    /**
-     * 从 token 中解析 playerId
-     */
-    public Long getPlayerId(String token) {
-        Claims claims = validateToken(token);
-        if (claims != null) {
-            String sub = claims.getSubject();
-            return sub != null ? Long.parseLong(sub) : null;
-        }
-        return null;
-    }
-
-    /**
-     * 从 claims 中获取 jti（用于黑名单检查）
-     */
-    public String getJti(String token) {
-        Claims claims = validateToken(token);
-        return claims != null ? claims.getId() : null;
-    }
 }

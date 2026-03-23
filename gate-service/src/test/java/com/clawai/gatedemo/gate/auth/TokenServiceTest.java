@@ -69,23 +69,10 @@ class TokenServiceTest {
     }
 
     @Test
-    void getPlayerId_withValidToken_returnsPlayerId() {
+    void validateToken_subjectCanBeParsedAsPlayerId() {
         String token = createToken("99999", "jti-004", new Date(System.currentTimeMillis() + 3600_000));
-        Long playerId = tokenService.getPlayerId(token);
-        assertNotNull(playerId);
-        assertEquals(99999L, playerId);
-    }
-
-    @Test
-    void getPlayerId_withInvalidToken_returnsNull() {
-        Long playerId = tokenService.getPlayerId("invalid.token");
-        assertNull(playerId);
-    }
-
-    @Test
-    void getPlayerId_withExpiredToken_returnsNull() {
-        String token = createToken("12345", "jti-005", new Date(System.currentTimeMillis() - 1000));
-        Long playerId = tokenService.getPlayerId(token);
-        assertNull(playerId);
+        Claims claims = tokenService.validateToken(token);
+        assertNotNull(claims);
+        assertEquals(99999L, Long.parseLong(claims.getSubject()));
     }
 }

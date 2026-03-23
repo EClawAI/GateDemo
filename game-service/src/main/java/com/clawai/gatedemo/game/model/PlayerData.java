@@ -4,7 +4,6 @@ import com.clawai.gatedemo.core.persistence.BaseEntity;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Document("player_data")
@@ -19,8 +18,8 @@ public class PlayerData implements BaseEntity<Long> {
     private long gold;
     private int diamond;
     private int vipLevel;
-    private LocalDateTime createTime;
-    private LocalDateTime lastLoginTime;
+    private long createTime;
+    private long lastLoginTime;
     private int loginCount;
     private List<ItemData> items;
 
@@ -84,19 +83,19 @@ public class PlayerData implements BaseEntity<Long> {
         this.vipLevel = vipLevel;
     }
 
-    public LocalDateTime getCreateTime() {
+    public long getCreateTime() {
         return createTime;
     }
 
-    public void setCreateTime(LocalDateTime createTime) {
+    public void setCreateTime(long createTime) {
         this.createTime = createTime;
     }
 
-    public LocalDateTime getLastLoginTime() {
+    public long getLastLoginTime() {
         return lastLoginTime;
     }
 
-    public void setLastLoginTime(LocalDateTime lastLoginTime) {
+    public void setLastLoginTime(long lastLoginTime) {
         this.lastLoginTime = lastLoginTime;
     }
 

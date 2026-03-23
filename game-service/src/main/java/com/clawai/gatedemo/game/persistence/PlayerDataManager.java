@@ -9,7 +9,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -23,7 +22,7 @@ public class PlayerDataManager extends AbstractDataManager<Long, PlayerData> {
 
     @Override
     protected PlayerData createDefault(Long playerId) {
-        LocalDateTime now = LocalDateTime.now();
+        long now = System.currentTimeMillis();
 
         PlayerData player = new PlayerData();
         player.setId(playerId);
