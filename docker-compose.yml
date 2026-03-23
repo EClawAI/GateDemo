@@ -16,6 +16,21 @@ services:
       retries: 5
       start_period: 5s
 
+  mongodb:
+    image: mongo:7-jammy
+    ports:
+      - "27017:27017"
+    networks:
+      - gatedemo
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
   center-service:
     build:
       context: ./center-service
@@ -75,6 +90,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB=gatedemo
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:9090"]
       interval: 10s
@@ -83,6 +101,8 @@ services:
       start_period: 10s
     depends_on:
       redis:
+        condition: service_healthy
+      mongodb:
         condition: service_healthy
     networks:
       - gatedemo
@@ -171,3 +191,4 @@ networks:
 
 volumes:
   redis-data:
+  mongo-data:

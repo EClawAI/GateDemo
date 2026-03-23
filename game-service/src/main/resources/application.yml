@@ -1,10 +1,15 @@
 spring:
   application:
     name: game-service
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DB:gatedemo}
 
 # Game 服务配置
 game:
   id: ${GAME_ID:1001}
+  persistence:
+    flush-interval: ${FLUSH_INTERVAL:30000}
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}

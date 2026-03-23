@@ -1,10 +1,14 @@
 package com.clawai.gatedemo.game.service;
 
+import com.clawai.gatedemo.game.model.PlayerData;
+import com.clawai.gatedemo.game.persistence.PlayerDataManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -24,9 +28,11 @@ public class GameMessageHandler {
     private static final Logger logger = LoggerFactory.getLogger(GameMessageHandler.class);
 
     private final ObjectMapper objectMapper;
+    private final PlayerDataManager playerDataManager;
 
-    public GameMessageHandler(ObjectMapper objectMapper) {
+    public GameMessageHandler(ObjectMapper objectMapper, PlayerDataManager playerDataManager) {
         this.objectMapper = objectMapper;
+        this.playerDataManager = playerDataManager;
     }
 
     /**
@@ -56,6 +62,12 @@ public class GameMessageHandler {
                 playerId, gameId, msgType, seq);
 
             switch (msgType) {
+                case "player.login":
+                    handlePlayerLogin(playerId, gameId, seq, body, sink);
+                    break;
+                case "player.save":
+                    handlePlayerSave(playerId, gameId, seq, sink);
+                    break;
                 case "echo":
                     handleEcho(playerId, gameId, seq, body, sink);
                     break;
@@ -74,6 +86,41 @@ public class GameMessageHandler {
         } catch (Exception e) {
             logger.error("❌ 处理游戏消息失败：{}", e.getMessage());
             throw new RuntimeException("处理游戏消息失败", e);
+        }
+    }
+
+    private void handlePlayerLogin(Long playerId, Integer gameId, int seq, Map<String, Object> body, OutgoingMessageSink sink) {
+        PlayerData player = playerDataManager.load(playerId);
+
+        playerDataManager.update(playerId, p -> {
+            p.setLastLoginTime(LocalDateTime.now());
+            p.setLoginCount(p.getLoginCount() + 1);
+        });
+        playerDataManager.saveNow(playerId);
+
+        logger.info("Player login: playerId={}, level={}, loginCount={}", playerId, player.getLevel(), player.getLoginCount());
+
+        if (sink != null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("playerId", player.getId());
+            response.put("nickname", player.getNickname());
+            response.put("level", player.getLevel());
+            response.put("gold", player.getGold());
+            response.put("diamond", player.getDiamond());
+            response.put("loginCount", player.getLoginCount());
+            sink.emit(playerId, gameId != null ? gameId : 0, "player.login", seq, response);
+        }
+    }
+
+    private void handlePlayerSave(Long playerId, Integer gameId, int seq, OutgoingMessageSink sink) {
+        playerDataManager.saveNow(playerId);
+        logger.info("Player data saved: playerId={}", playerId);
+
+        if (sink != null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("playerId", playerId);
+            response.put("result", "ok");
+            sink.emit(playerId, gameId != null ? gameId : 0, "player.save", seq, response);
         }
     }
 

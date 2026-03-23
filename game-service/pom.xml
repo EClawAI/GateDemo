@@ -15,10 +15,10 @@
     <description>无状态游戏服务 - 消息生产者</description>
 
     <dependencies>
-        <!-- Common module (Proto classes, shared DTOs) -->
+        <!-- Core module (persistence, core business logic; transitively includes common) -->
         <dependency>
             <groupId>com.clawai.gatedemo</groupId>
-            <artifactId>common</artifactId>
+            <artifactId>core</artifactId>
         </dependency>
 
         <!-- Spring Boot Starters (仅基础，不包含 Web) -->

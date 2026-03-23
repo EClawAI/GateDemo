@@ -2,7 +2,7 @@
 
 ### Requirement: BaseEntity 通用实体接口
 
-core 模块 SHALL 提供 `BaseEntity<ID>` 接口，定义 `ID getId()` 方法，作为所有持久化实体的基础契约。所有需要被 `AbstractDataManager` 管理的数据模型 MUST 实现此接口。
+core 模块 SHALL 在 `com.clawai.gatedemo.core.persistence` 包中提供 `BaseEntity<ID>` 接口，定义 `ID getId()` 方法，作为所有持久化实体的基础契约。所有需要被 `AbstractDataManager` 管理的数据模型 MUST 实现此接口。
 
 #### Scenario: 实体类实现 BaseEntity
 - **WHEN** 业务模块定义新的数据模型类
@@ -11,7 +11,7 @@ core 模块 SHALL 提供 `BaseEntity<ID>` 接口，定义 `ID getId()` 方法，
 
 ### Requirement: AbstractDataManager 泛型持久化基类
 
-core 模块 SHALL 提供 `AbstractDataManager<ID, T extends BaseEntity<ID>>` 抽象类，封装以下通用能力：
+core 模块 SHALL 在 `com.clawai.gatedemo.core.persistence` 包中提供 `AbstractDataManager<ID, T extends BaseEntity<ID>>` 抽象类，封装以下通用能力：
 - 内存缓存（ConcurrentHashMap）
 - 脏数据追踪（dirty set）
 - 从 MongoDB 加载数据到缓存

@@ -4,17 +4,19 @@ GateDemo 是一个无状态游戏网关演示项目，采用 Spring Boot 3.2 + J
 
 目前所有服务没有数据持久化能力。game-service 接收 gRPC 消息，处理完毕后数据即丢弃。Redis 仅用于服务发现和状态同步，不做业务数据存储。
 
-项目已有一个空的 `core/` 目录结构（含 `persistence/mongo` 包骨架），但无 pom.xml，未注册到 parent modules。
+项目缺少一个承载通用核心业务逻辑的底层框架模块。现有 `common` 模块仅存放 Proto 生成类和共享 DTO，定位是数据定义层，不适合放业务框架代码。项目已有一个空的 `core/` 目录结构（含 `persistence/mongo` 包骨架），但无 pom.xml，未注册到 parent modules。
 
 ## Goals / Non-Goals
 
 **Goals:**
-- 在 core 模块中提供通用的 MongoDB 持久化抽象，支持内存缓存 + dirty tracking + 定时批量刷盘 + 立即写入
+- 正式建立 `core` 为底层核心业务框架模块，包结构按职责域划分，供所有上层 service 依赖
+- 明确 `common`（数据定义层：Proto/DTO）与 `core`（核心业务框架层：持久化/缓存/事件等）的分工
+- 首批能力：在 core 中提供通用的 MongoDB 持久化抽象，支持内存缓存 + dirty tracking + 定时批量刷盘 + 立即写入
 - 在 game-service 中实现玩家数据的 MongoDB 落地，首次登录生成模拟数据
-- 设计足够通用，使未来其他微服务可直接复用 core 的持久化层
 - 各服务自行配置 MongoDB 连接，core 不提供 auto-configuration
 
 **Non-Goals:**
+- 本次不在 core 中引入持久化以外的其他能力（事件、缓存框架等），但包结构预留扩展空间
 - 不实现完整的 Repository/DAO 模式，保持轻量级抽象
 - 不做 MongoDB 分片/副本集配置，Demo 环境使用单节点
 - 不改变现有 Redis 的用途（服务发现、状态同步等继续使用 Redis）
@@ -23,13 +25,27 @@ GateDemo 是一个无状态游戏网关演示项目，采用 Spring Boot 3.2 + J
 
 ## Decisions
 
-### D1: core 模块定位为纯持久化层
+### D1: core 模块定位为底层核心业务框架
 
-**决策**: core 仅包含持久化抽象（当前是 MongoDB），不引入缓存、事件、通用配置等其他底层能力。
+**决策**: core 定位为各上层 service 通用核心业务逻辑的承载层，包结构按职责域划分（`persistence/`、`model/` 等），与 `common`（数据定义层）互补。本次首批实现 `persistence` 包，但模块结构预留其他职责域的扩展空间。
 
-**替代方案**: 将 core 定位为全能微服务底座（包含 cache、event、config 等）。
+**替代方案**:
+- 方案A: core 仅做纯持久化层 — 定位过窄，后续加其他通用业务逻辑时需要再建模块或改定位
+- 方案B: 把核心业务逻辑直接放 common — common 当前是纯数据定义（Proto/DTO），混入业务框架会导致职责模糊，且 common 的依赖链很轻，不应引入 MongoDB 等重依赖
 
-**理由**: 项目已有 common 模块放共享 DTO/Proto。core 聚焦持久化可避免职责模糊，后续需要时再扩展。保持 YAGNI 原则。
+**理由**: `common` = 数据定义层（轻依赖，所有模块可引用），`core` = 核心业务框架层（可引入 MongoDB、Spring 等较重依赖，上层 service 按需引用）。这种分层使依赖关系清晰：`common ← core ← game-service / gate-service / ...`。
+
+**core 包结构规划**:
+```
+com.clawai.gatedemo.core
+├── persistence/       ← 本次实现：MongoDB 持久化抽象
+│   ├── BaseEntity.java
+│   └── AbstractDataManager.java
+├── model/             ← 预留：通用业务模型基类
+├── event/             ← 预留：跨服务事件抽象
+├── cache/             ← 预留：通用缓存抽象
+└── config/            ← 预留：通用配置抽象
+```
 
 ### D2: 轻度泛型 AbstractDataManager 而非完整 Repository
 
