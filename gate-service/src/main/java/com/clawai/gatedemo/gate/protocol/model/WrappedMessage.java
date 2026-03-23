@@ -115,14 +115,6 @@ public class WrappedMessage {
     }
 
     /**
-     * 获取消息ID的便捷方法
-     * @return 消息ID
-     */
-    public short getMessageId() {
-        return header != null ? header.getMessageId() : 0;
-    }
-
-    /**
      * 转换为字符串表示
      * 用于日志和调试
      * @return 字符串形式的消息

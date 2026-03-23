@@ -10,20 +10,9 @@ public class GameConfig {
     private String id = "game-1001";
     private String host = "localhost";
     private int port = 9090;
-    private Cache cache = new Cache();
     private RedisConfig redis = new RedisConfig();
     private StatusConfig status = new StatusConfig();
     private RegistryConfig registry = new RegistryConfig();
-
-    public static class Cache {
-        private int maxSize = 10000;
-        private int expireMinutes = 30;
-
-        public int getMaxSize() { return maxSize; }
-        public void setMaxSize(int maxSize) { this.maxSize = maxSize; }
-        public int getExpireMinutes() { return expireMinutes; }
-        public void setExpireMinutes(int expireMinutes) { this.expireMinutes = expireMinutes; }
-    }
 
     public static class RedisConfig {
         private String host = "localhost";
@@ -67,8 +56,6 @@ public class GameConfig {
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
     public void setPort(int port) { this.port = port; }
-    public Cache getCache() { return cache; }
-    public void setCache(Cache cache) { this.cache = cache; }
     public RedisConfig getRedis() { return redis; }
     public void setRedis(RedisConfig redis) { this.redis = redis; }
     public StatusConfig getStatus() { return status; }

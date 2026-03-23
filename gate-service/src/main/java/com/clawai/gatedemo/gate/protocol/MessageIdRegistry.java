@@ -27,14 +27,8 @@ import java.util.Map;
  *
  * 使用示例：
  * <pre>
- * // 获取消息ID
  * short loginId = MessageIdRegistry.getIdByName("auth.login");  // 返回0x1001
- *
- * // 获取消息名称
  * String name = MessageIdRegistry.getNameById((short) 0x1001);  // 返回"auth.login"
- *
- * // 检查是否注册
- * boolean registered = MessageIdRegistry.isRegistered("auth.login");  // 返回true
  * </pre>
  *
  * @see MessageIdGenerator 自动生成ID
@@ -119,32 +113,4 @@ public class MessageIdRegistry {
         return ID_TO_NAME.get(id);
     }
 
-    /**
-     * 获取所有映射关系
-     *
-     * @return 名称→ID的映射
-     */
-    public static Map<String, Short> getAllMappings() {
-        return new HashMap<>(NAME_TO_ID);
-    }
-
-    /**
-     * 检查消息名称是否已注册
-     *
-     * @param name 消息名称
-     * @return true表示已注册
-     */
-    public static boolean isRegistered(String name) {
-        return NAME_TO_ID.containsKey(name);
-    }
-
-    /**
-     * 检查消息ID是否已注册
-     *
-     * @param id 消息ID
-     * @return true表示已注册
-     */
-    public static boolean isRegistered(short id) {
-        return ID_TO_NAME.containsKey(id);
-    }
 }

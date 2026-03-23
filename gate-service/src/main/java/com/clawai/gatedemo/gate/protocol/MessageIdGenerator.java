@@ -79,28 +79,4 @@ public class MessageIdGenerator {
         return (short) (hash & MASK_16BIT);
     }
 
-    /**
-     * 从消息ID反向查找消息名称
-     *
-     * 需要配合MessageIdRegistry使用
-     *
-     * @param messageId 消息ID
-     * @return 消息名称，如果未注册则返回null
-     */
-    public static String generateName(short messageId) {
-        return MessageIdRegistry.getNameById(messageId);
-    }
-
-    /**
-     * 主方法用于测试
-     * 运行此方法可以查看各消息名称对应的ID
-     */
-    public static void main(String[] args) {
-        System.out.println("auth.login -> " + generateId("auth.login"));
-        System.out.println("auth.logout -> " + generateId("auth.logout"));
-        System.out.println("auth.relogin -> " + generateId("auth.relogin"));
-        System.out.println("heartbeat -> " + generateId("heartbeat"));
-        System.out.println("battle.move -> " + generateId("battle.move"));
-        System.out.println("chat.send -> " + generateId("chat.send"));
-    }
 }

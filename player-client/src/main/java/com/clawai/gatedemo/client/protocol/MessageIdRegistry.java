@@ -34,7 +34,4 @@ public class MessageIdRegistry {
         return ID_TO_NAME.get(id);
     }
 
-    public static Map<String, Short> getAllMappings() {
-        return new HashMap<>(NAME_TO_ID);
-    }
 }

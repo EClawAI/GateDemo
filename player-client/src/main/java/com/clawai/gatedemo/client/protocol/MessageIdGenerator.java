@@ -17,7 +17,4 @@ public class MessageIdGenerator {
         return (short) (hash & 0xFFFF);
     }
 
-    public static String generateName(short messageId) {
-        return MessageIdRegistry.getNameById(messageId);
-    }
 }
