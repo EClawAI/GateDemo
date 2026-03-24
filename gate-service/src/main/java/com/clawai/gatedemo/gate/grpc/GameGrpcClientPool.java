@@ -186,11 +186,10 @@ public class GameGrpcClientPool {
 
         ManagedChannel channel = builder.build();
 
-        GateConfig.GrpcPoolConfig poolCfg = gateConfig.getGrpcPool();
         ExponentialBackoff backoff = new ExponentialBackoff(
-            poolCfg.getReconnectDelay(),
-            poolCfg.getReconnectMaxDelay(),
-            poolCfg.getReconnectMultiplier()
+            poolConfig.getReconnectDelay(),
+            poolConfig.getReconnectMaxDelay(),
+            poolConfig.getReconnectMultiplier()
         );
 
         // 创建连接对象

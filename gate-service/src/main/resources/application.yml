@@ -61,6 +61,8 @@ gate:
     global:
       max-requests: ${RATELIMIT_GLOBAL_MAX:10000}
       window-ms: ${RATELIMIT_GLOBAL_WINDOW:1000}
+  cluster:
+    enabled: true
   circuitbreaker:
     failure-threshold: ${CB_FAILURE_THRESHOLD:5}
     reset-timeout-ms: ${CB_RESET_TIMEOUT:30000}

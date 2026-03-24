@@ -126,8 +126,8 @@ public class GateConfig {
     public static class LoginService {
         /** Login 服务主机地址 */
         private String host = "localhost";
-        /** Login 服务端口 */
-        private int port = 9081;
+        /** Login 服务端口，需与 login-service 的 server.port 一致 */
+        private int port = 9086;
         /** Login 服务心跳间隔（秒） */
         private int heartbeatInterval = 30;
 
