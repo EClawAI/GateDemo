@@ -13,6 +13,10 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.zip.Inflater;
 
+/**
+ * Netty 侧二进制帧解码，与网关解码规则对齐：定长头、可选解压、体反序列化为 {@link JsonMessageBody}，
+ * 供 TCP/WebSocket 二进制管道与 gate 对拍。
+ */
 public class ClientMessageDecoder extends ByteToMessageDecoder {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientMessageDecoder.class);

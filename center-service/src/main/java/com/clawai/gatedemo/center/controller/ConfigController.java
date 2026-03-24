@@ -9,6 +9,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 将 {@link CenterConfig} 聚合为对外配置接口，供客户端启动或定时拉取统一视图。
+ */
 @RestController
 @RequestMapping("/api/v1")
 public class ConfigController {

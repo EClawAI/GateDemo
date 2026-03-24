@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+/**
+ * 按消息 ID 分发下行业务：注册回调与默认日志兜底，将协议层解析结果交给业务或测试逻辑。
+ */
 public class MessageListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MessageListener.class);

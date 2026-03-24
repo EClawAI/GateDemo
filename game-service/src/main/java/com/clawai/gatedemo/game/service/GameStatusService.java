@@ -13,6 +13,9 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 维护当前 {@link GameStatus} 与在线人数，周期性同步到 Redis，并在状态变化时通知 {@link GameRegistryService} 发布事件。
+ */
 @Service
 public class GameStatusService {
 

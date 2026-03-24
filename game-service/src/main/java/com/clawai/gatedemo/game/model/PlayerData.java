@@ -6,6 +6,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.List;
 
+/**
+ * MongoDB {@code player_data} 文档模型：承载玩家档案、经济字段与道具列表，是 Game 逻辑层的权威玩家状态。
+ */
 @Document("player_data")
 public class PlayerData implements BaseEntity<Long> {
 

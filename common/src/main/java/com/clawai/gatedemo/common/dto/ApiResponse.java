@@ -1,5 +1,8 @@
 package com.clawai.gatedemo.common.dto;
 
+/**
+ * 跨微服务 REST 响应的统一信封，便于网关、登录、中心等模块以一致结构返回成功与错误。
+ */
 public class ApiResponse<T> {
     private int code;
     private String message;

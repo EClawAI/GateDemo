@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 组装 TCP Channel 流水线：读空闲检测、心跳超时关闭、游戏帧编解码，保证连接可观测且与网关二进制协议一致。
+ */
 @Component
 public class TcpChannelInitializer extends ChannelInitializer<SocketChannel> {
 

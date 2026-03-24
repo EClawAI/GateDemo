@@ -13,6 +13,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 基于 Redis Streams 消费者组从 gate→game 消息流拉取条目并确认消费，将异步下行与游戏服处理解耦。
+ */
 @Component
 public class MessageQueueConsumer {
 

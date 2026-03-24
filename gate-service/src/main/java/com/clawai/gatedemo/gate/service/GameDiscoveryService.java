@@ -19,6 +19,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+/**
+ * 从 Redis 游戏注册表加载实例、订阅上下线与状态事件，并同步维护 {@link GameGrpcClientPool}，使网关 gRPC 目标与真实 game-service 拓扑一致。
+ */
 @Service
 public class GameDiscoveryService {
 

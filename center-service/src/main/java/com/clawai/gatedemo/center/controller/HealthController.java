@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 轻量存活探针，供负载均衡与编排判断 center-service 进程是否可对外服务。
+ */
 @RestController
 public class HealthController {
 

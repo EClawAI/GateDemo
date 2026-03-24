@@ -4,6 +4,9 @@ import io.netty.channel.Channel;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+/**
+ * 表示单条玩家 TCP 连接在网关内的会话视图：关联 Netty Channel、心跳时间与认证状态，供连接管理与路由决策使用。
+ */
 public class PlayerConnection {
 
     private final Long playerId;

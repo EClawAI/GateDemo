@@ -3,6 +3,9 @@ package com.clawai.gatedemo.game.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 绑定 {@code game.*} 配置：实例标识、监听地址、Redis、状态心跳与注册发现参数，是 Game 与 Login/注册表协作的单一配置源。
+ */
 @Configuration
 @ConfigurationProperties(prefix = "game")
 public class GameConfig {

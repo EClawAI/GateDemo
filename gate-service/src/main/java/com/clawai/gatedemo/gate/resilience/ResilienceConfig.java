@@ -4,6 +4,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 注册网关韧性相关 Bean：按玩家/全局限流器抑制滥用，gRPC 熔断器在下游 game-service 异常时快速失败、保护网关。
+ */
 @Configuration
 public class ResilienceConfig {
 

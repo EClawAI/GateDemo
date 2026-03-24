@@ -3,6 +3,9 @@ package com.clawai.gatedemo.client.protocol;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 客户端静态消息名与短 ID 对照表，与 gate-service 默认约定对齐；查表失败时回退到生成器以保证扩展消息可互通。
+ */
 public class MessageIdRegistry {
 
     private static final Map<Short, String> ID_TO_NAME = new HashMap<>();

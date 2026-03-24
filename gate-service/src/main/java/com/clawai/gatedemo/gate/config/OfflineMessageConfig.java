@@ -3,6 +3,9 @@ package com.clawai.gatedemo.gate.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * 绑定 {@code offline-message.*} 配置：离线消息堆积阈值、开关与最长保留天数，供网关侧离线策略使用。
+ */
 @Configuration
 @ConfigurationProperties(prefix = "offline-message")
 public class OfflineMessageConfig {

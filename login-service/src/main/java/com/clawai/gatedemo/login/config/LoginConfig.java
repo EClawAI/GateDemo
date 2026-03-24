@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 绑定 {@code login.*} 配置，为登录服务提供监听端口、Redis 连接及推荐游戏列表等运行参数。
+ */
 @Data
 @Component
 @ConfigurationProperties(prefix = "login")

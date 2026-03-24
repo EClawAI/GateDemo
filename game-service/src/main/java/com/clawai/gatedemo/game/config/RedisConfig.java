@@ -9,6 +9,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+/**
+ * 为 Game 服务提供独立 Redis 连接与 {@link RedisTemplate}，支撑游戏注册、状态同步等跨服务共享数据。
+ */
 @Configuration
 public class RedisConfig {
 

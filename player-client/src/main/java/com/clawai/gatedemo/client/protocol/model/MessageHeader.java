@@ -1,5 +1,8 @@
 package com.clawai.gatedemo.client.protocol.model;
 
+/**
+ * 14 字节二进制帧头在客户端侧的镜像：承载标志位、序号、消息 ID、体长与请求 ID，并提供压缩/模式等语义辅助。
+ */
 public class MessageHeader {
 
     private short flags;

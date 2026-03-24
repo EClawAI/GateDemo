@@ -7,6 +7,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
+/**
+ * 适配层：将网关转发的 Map 形态上行消息转为 JSON 串后交给 {@link GameMessageHandler}，使 Game 逻辑与 Gate 传输格式解耦。
+ */
 @Service
 public class UpstreamConsumerService {
 

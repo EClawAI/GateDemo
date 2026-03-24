@@ -1,5 +1,8 @@
 package com.clawai.gatedemo.client.reconnect;
 
+/**
+ * 可上限指数退避的重连策略：控制间隔倍增与最大重试次数，避免断线时对网关造成突发连接风暴。
+ */
 public class ExponentialBackoffPolicy implements ReconnectPolicy {
 
     private final long initialDelay;

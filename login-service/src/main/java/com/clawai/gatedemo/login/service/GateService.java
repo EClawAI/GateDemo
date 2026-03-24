@@ -12,6 +12,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 维护网关存活视图：内存缓存结合 Redis TTL 心跳，支撑按在线数选路与查询当前网关列表。
+ */
 @Service
 public class GateService {
 

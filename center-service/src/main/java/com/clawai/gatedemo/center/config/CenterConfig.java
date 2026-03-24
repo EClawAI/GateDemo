@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 绑定 {@code center.*}，集中管理需下发给客户端的版本策略、SDK/登录端点与公告等内容。
+ */
 @Data
 @Component
 @ConfigurationProperties(prefix = "center")

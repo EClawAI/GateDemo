@@ -5,6 +5,10 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
+/**
+ * player-client 模块入口：Spring Boot 应用通过 {@link CommandLineRunner} 在后台线程拉起演示客户端，
+ * 避免阻塞应用启动，用于联调验证与 gate-service 的完整通信链路。
+ */
 @SpringBootApplication
 public class PlayerClientApplication implements CommandLineRunner {
 

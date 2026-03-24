@@ -10,6 +10,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 在读空闲（未收到对端数据，含心跳帧）达到阈值时主动关闭连接，避免僵尸 TCP 占用网关资源。
+ */
 public class TcpHeartbeatHandler extends IdleStateHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(TcpHeartbeatHandler.class);

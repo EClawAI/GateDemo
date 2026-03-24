@@ -10,6 +10,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.zip.Deflater;
 
+/**
+ * 将 {@link WrappedMessage} 编码为与网关一致的定长头 + 载荷字节流，按需压缩，保证客户端发帧与 gate 解析一致。
+ */
 public class ClientMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientMessageEncoder.class);

@@ -11,6 +11,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+/**
+ * 管理二进制请求-响应关联：为出站报文分配 {@code requestId}、挂起回调并在超时或回包时完成或清理，
+ * 支撑客户端侧的半双工/异步 RPC 语义。
+ */
 public class RequestManager {
 
     private static final Logger logger = LoggerFactory.getLogger(RequestManager.class);

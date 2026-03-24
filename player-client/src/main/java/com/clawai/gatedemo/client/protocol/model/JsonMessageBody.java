@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
+/**
+ * 基于共享静态 {@link ObjectMapper} 的 JSON 体实现，在演示客户端内统一序列化/反序列化，避免多处配置漂移。
+ */
 public class JsonMessageBody implements MessageBody {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();

@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 登录路由领域服务：综合 Redis 中游戏开服状态、玩家上次游戏与配置推荐服，决策目标游戏并配合 {@link GateService} 绑定网关。
+ */
 @Service
 public class GameRouteService {
 

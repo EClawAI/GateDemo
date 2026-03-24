@@ -12,6 +12,9 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 将本 Game 实例的地址与运行状态写入 Redis 注册表，并通过频道广播注册/注销/状态变更，供 Login 等服务发现与路由。
+ */
 @Service
 public class GameRegistryService {
 

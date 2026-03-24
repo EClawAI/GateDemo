@@ -1,5 +1,10 @@
 package com.clawai.gatedemo.client.protocol.model;
 
+/**
+ * 编解码管道中的逻辑报文单元：头与体组合，串联
+ * {@link com.clawai.gatedemo.client.protocol.codec.ClientMessageEncoder}/
+ * {@link com.clawai.gatedemo.client.protocol.codec.ClientMessageDecoder} 与上层监听。
+ */
 public class WrappedMessage {
 
     private MessageHeader header;

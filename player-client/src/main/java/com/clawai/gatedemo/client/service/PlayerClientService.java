@@ -15,6 +15,10 @@ import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 
+/**
+ * 演示用玩家客户端核心逻辑：基于 WebFlux {@link ReactorNettyWebSocketClient} 连接 gate WebSocket，
+ * 完成鉴权、周期性心跳、下行解析与控制台交互发令，用于端到端验证文本协议路径。
+ */
 @Service
 public class PlayerClientService {
 

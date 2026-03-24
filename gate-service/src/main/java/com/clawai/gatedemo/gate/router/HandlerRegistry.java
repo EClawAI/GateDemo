@@ -3,6 +3,9 @@ package com.clawai.gatedemo.gate.router;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 进程内消息号到 {@link MessageHandler} 的注册表，是 TCP 协议分发扩展点：新业务通过注册 messageId 接入而无需改核心管线。
+ */
 public class HandlerRegistry {
 
     private final Map<Short, MessageHandler> handlers = new ConcurrentHashMap<>();

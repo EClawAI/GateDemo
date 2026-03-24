@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * 登录域 REST 入口：编排 JWT 签发、游戏路由、登录记录与网关心跳/列表，连接客户端与网关/游戏状态。
+ */
 @RestController
 @RequestMapping("/api/v1")
 public class LoginController {

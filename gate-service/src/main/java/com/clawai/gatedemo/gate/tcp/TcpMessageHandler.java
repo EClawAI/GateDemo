@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+/**
+ * Netty 入站处理器：记录连接生命周期，将协议层 {@link WrappedMessage} 交给 {@link MessageDispatcher}，完成 TCP 到业务路由的衔接。
+ */
 @Component
 public class TcpMessageHandler extends SimpleChannelInboundHandler<WrappedMessage> {
 

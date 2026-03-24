@@ -8,6 +8,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * 在断线或失败路径上按 {@link ReconnectPolicy} 调度延迟重连，并通过回调暴露尝试/成功/失败/用尽次数等生命周期。
+ */
 public class ReconnectManager {
 
     private static final Logger logger = LoggerFactory.getLogger(ReconnectManager.class);

@@ -9,6 +9,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+/**
+ * 依据 {@link LoginConfig} 装配 Redis 连接与 {@link RedisTemplate}，统一键值序列化策略，供路由与会话等共享状态使用。
+ */
 @Configuration
 public class RedisConfig {
 

@@ -5,6 +5,9 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * 与客户端协议对齐的配置响应 DTO，从 {@link CenterConfig} 映射而来，避免直接暴露内部配置结构。
+ */
 @Data
 public class ConfigResponse {
     private VersionInfo version;

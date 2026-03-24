@@ -13,6 +13,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Game 微服务入口：无 Web MVC、以 gRPC/调度为主进程；启动后将可登录状态交给 {@link GameStatusService}，供 Login 与网关做登录门禁。
+ */
 @SpringBootApplication(exclude = {
     WebMvcAutoConfiguration.class
 })

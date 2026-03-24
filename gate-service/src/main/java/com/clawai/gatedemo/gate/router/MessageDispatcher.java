@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * 将解码后的 {@link WrappedMessage} 按消息号派发到已注册处理器；内置鉴权与心跳占位处理，业务 handler 可运行时挂载。
+ */
 @Component
 public class MessageDispatcher {
 

@@ -3,6 +3,9 @@ package com.clawai.gatedemo.gate.model;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
 
+/**
+ * WebSocket 侧 JSON 消息载体，与客户端约定 type（如鉴权、心跳、游戏业务）及 seq/body 等字段，便于网关解析后转发或落队。
+ */
 public class PlayerMessage {
 
     @JsonProperty("type")

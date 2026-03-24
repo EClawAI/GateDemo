@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * 基于核心模块 {@link AbstractDataManager} 的玩家数据管理：负责默认建号模板与定时刷盘，隔离 Mongo 访问与业务逻辑。
+ */
 @Component
 public class PlayerDataManager extends AbstractDataManager<Long, PlayerData> {
 

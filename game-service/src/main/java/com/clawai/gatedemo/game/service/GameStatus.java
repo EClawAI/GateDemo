@@ -1,5 +1,8 @@
 package com.clawai.gatedemo.game.service;
 
+/**
+ * 游戏服生命周期与是否允许登录的离散状态，与 Redis 中的状态值对齐，供登录网关判断是否放行玩家。
+ */
 public enum GameStatus {
     NOT_STARTED(0, "服务未启动"),
     STARTED_NOT_LOGIN(1, "已启动但不可登录"),

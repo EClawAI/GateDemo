@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * 暴露 {@code /health}，供编排与监控探测登录服务整体及 Redis 依赖是否就绪。
+ */
 @RestController
 public class HealthController {
 
