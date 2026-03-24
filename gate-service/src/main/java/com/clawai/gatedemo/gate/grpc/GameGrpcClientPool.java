@@ -40,15 +40,9 @@ import java.util.concurrent.TimeUnit;
  * │    └─ 1003 → Channel → Game-3          │
  * └─────────────────────────────────────────┘
  * 
- * 配置示例（application.yml）：
- * gate:
- *   games:
- *     - id: 1001
- *       host: localhost
- *       port: 9091
- *     - id: 1002
- *       host: localhost
- *       port: 9092
+ * 连接来源：
+ * Game 实例由 {@link com.clawai.gatedemo.gate.service.GameDiscoveryService}
+ * 从 Redis 注册表动态发现，通过 {@link #addConnection}/{@link #removeConnection} 维护池。
  * 
  * Stream通信说明：
  * - 每个Game服务建立双向Stream连接
@@ -145,8 +139,8 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 创建重连线程池并按配置为每个 Game 建连、拉流与心跳。
-     * 副作用：向连接池写入条目并启动 stream/heartbeat；应由容器仅调用一次。
+     * 初始化重连线程池。实际 Game 连接由 {@link com.clawai.gatedemo.gate.service.GameDiscoveryService}
+     * 通过 Redis 服务发现后调用 {@link #addConnection} 动态建立。
      */
     @PostConstruct
     public void init() {
@@ -158,12 +152,7 @@ public class GameGrpcClientPool {
             return t;
         });
 
-        // 从配置中读取 Game 服务列表
-        for (GateConfig.GameInstance game : gateConfig.getGames()) {
-            addConnection(game.getId(), game.getHost(), game.getPort());
-        }
-
-        logger.info("✅ gRPC 连接池初始化完成，连接数：{}", connectionPool.size());
+        logger.info("✅ gRPC 连接池初始化完成，等待服务发现注入连接");
     }
     
     /**

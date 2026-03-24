@@ -36,10 +36,6 @@ gate:
     reconnect-max-delay: ${GRPC_RECONNECT_MAX_DELAY:60000}
     reconnect-multiplier: ${GRPC_RECONNECT_MULTIPLIER:2.0}
     heartbeat-interval: ${GRPC_HEARTBEAT_INTERVAL:30000}
-  games:
-    - id: 1001
-      host: ${GAME_1001_HOST:localhost}
-      port: ${GAME_1001_PORT:9090}
   player:
     heartbeat-interval: 60
   health:

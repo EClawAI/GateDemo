@@ -29,9 +29,6 @@ class GameGrpcClientPoolTest {
     @Mock
     private GateConfig gateConfig;
 
-    @Mock
-    private GateConfig.GameInstance gameInstance;
-
     private ObjectMapper objectMapper;
     private GameGrpcClientPool clientPool;
 

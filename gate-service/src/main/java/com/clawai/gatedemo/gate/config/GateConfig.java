@@ -21,8 +21,6 @@ public class GateConfig {
     private String host = "0.0.0.0";
     /** Gate 服务 HTTP 监听端口 */
     private int port = 8888;
-    /** 关联的游戏实例列表 */
-    private List<GameInstance> games = new ArrayList<>();
     /** 玩家相关配置 */
     private Player player = new Player();
     /** Login 服务配置 */
@@ -107,26 +105,6 @@ public class GateConfig {
         public void setKeystorePath(String keystorePath) { this.keystorePath = keystorePath; }
         public String getKeystorePassword() { return keystorePassword; }
         public void setKeystorePassword(String keystorePassword) { this.keystorePassword = keystorePassword; }
-    }
-
-    /**
-     * 游戏实例配置
-     * 表示一个可连接的游戏服务器
-     */
-    public static class GameInstance {
-        /** 游戏实例 ID */
-        private int id;
-        /** 游戏服务器主机地址 */
-        private String host = "localhost";
-        /** 游戏服务器端口 */
-        private int port = 9090;
-
-        public int getId() { return id; }
-        public void setId(int id) { this.id = id; }
-        public String getHost() { return host; }
-        public void setHost(String host) { this.host = host; }
-        public int getPort() { return port; }
-        public void setPort(int port) { this.port = port; }
     }
 
     /**
@@ -276,8 +254,6 @@ public class GateConfig {
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }
     public void setPort(int port) { this.port = port; }
-    public List<GameInstance> getGames() { return games; }
-    public void setGames(List<GameInstance> games) { this.games = games; }
     public Player getPlayer() { return player; }
     public void setPlayer(Player player) { this.player = player; }
     public LoginService getLoginService() { return loginService; }
