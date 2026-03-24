@@ -51,15 +51,11 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
     private static final int COMPRESS_THRESHOLD = 64;
 
     /**
-     * 核心编码方法
+     * 将 {@link WrappedMessage} 写成头+体；可能按阈值压缩并回写 {@link MessageHeader#setBodyLength(int)} 与压缩标志。
      *
-     * Netty调用时机：
-     * - 当ChannelPipeline中有Handler写入WrappedMessage时
-     * - Netty会自动调用此方法进行编码
-     *
-     * @param ctx Netty通道上下文，用于获取通道信息
-     * @param msg 要编码的消息对象
-     * @param out 输出的ByteBuf，编码后的数据写入此缓冲区
+     * @param ctx Netty 上下文
+     * @param msg null 或 header 为 null 时直接返回，不写 out
+     * @param out 编码输出缓冲
      */
     @Override
     protected void encode(ChannelHandlerContext ctx, WrappedMessage msg, ByteBuf out) throws Exception {
@@ -112,26 +108,10 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
     }
 
     /**
-     * 使用DEFLATE算法压缩数据
+     * 使用 {@link Deflater} 做 DEFLATE；仅当压缩后严格变短才返回新数组，否则返回 null 表示沿用原文。
      *
-     * DEFLATE算法：
-     * - 无损压缩算法，结合LZ77和Huffman编码
-     * - Java标准库java.util.zip.Deflater实现
-     * - 压缩比约为原始数据的50-70%
-     *
-     * 实现细节：
-     * 1. 创建Deflater实例
-     * 2. 输入原始数据
-     * 3. finish()表示数据输入完成
-     * 4. deflate()执行压缩
-     * 5. 释放资源end()
-     *
-     * 为什么不使用GZIPOutputStream？
-     * - GZIP在DEFLATE基础上加了GZIP头尾，额外2-18字节
-     * - 游戏协议追求简洁，不需要GZIP的兼容性
-     *
-     * @param data 要压缩的原始数据
-     * @return 压缩后的数据，如果压缩失败或未压缩则返回null
+     * @param data 原始消息体字节
+     * @return 更短的压缩结果，或 null
      */
     private byte[] compress(byte[] data) {
         // 创建DEFLATE压缩器

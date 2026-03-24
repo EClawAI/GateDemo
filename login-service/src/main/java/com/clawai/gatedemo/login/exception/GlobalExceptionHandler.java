@@ -11,14 +11,19 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Global REST exception handler for login-service.
- * Returns unified ApiResponse.error() with appropriate codes.
+ * 登录服务全局 REST 异常处理，将校验与解析错误映射为统一 {@link ApiResponse} 错误体。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * 处理 Bean 校验失败，汇总字段错误信息。
+     *
+     * @param ex 校验异常
+     * @return HTTP 400 与 code=400 的 {@link ApiResponse}
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

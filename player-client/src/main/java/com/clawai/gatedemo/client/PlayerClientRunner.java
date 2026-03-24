@@ -38,11 +38,20 @@ public class PlayerClientRunner implements CommandLineRunner {
     private final PlayerClientConfig config;
     private final PlayerNettyHandler handler;
 
+    /**
+     * @param config   Netty 客户端运行期配置（地址、玩家 ID、心跳等）
+     * @param handler  业务 ChannelHandler，负责握手后鉴权与报文处理
+     */
     public PlayerClientRunner(PlayerClientConfig config, PlayerNettyHandler handler) {
         this.config = config;
         this.handler = handler;
     }
 
+    /**
+     * Spring Boot 启动完成后触发，委托 {@link #connect()} 建立与 Gate 的长连接。
+     *
+     * @param args 命令行参数（未使用）
+     */
     @Override
     public void run(String... args) {
         connect();

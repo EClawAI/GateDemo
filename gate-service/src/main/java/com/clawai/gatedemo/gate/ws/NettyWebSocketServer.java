@@ -55,7 +55,7 @@ public class NettyWebSocketServer {
     /** Netty 服务器 Channel */
     private Channel serverChannel;
 
-    /** TLS context (null when TLS disabled) */
+    /** 启用 WSS 时非空；纯 WS 时为 null */
     private SslContext sslContext;
 
     /**

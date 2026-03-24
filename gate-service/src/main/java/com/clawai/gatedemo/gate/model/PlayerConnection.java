@@ -15,10 +15,15 @@ public class PlayerConnection {
     private final AtomicLong lastHeartbeatTime;
     private volatile State state;
 
+    /** TCP 会话状态：连接中 → 已认证 → 已断开 */
     public enum State {
         CONNECTING, AUTHENTICATED, DISCONNECTED
     }
 
+    /**
+     * @param playerId 逻辑玩家 ID
+     * @param channel  Netty 连接，用于存活判断与写回包
+     */
     public PlayerConnection(Long playerId, Channel channel) {
         this.playerId = playerId;
         this.channel = channel;
@@ -43,6 +48,7 @@ public class PlayerConnection {
         return lastHeartbeatTime.get();
     }
 
+    /** 将最后心跳时间更新为当前时间（线程安全）。 */
     public void updateHeartbeat() {
         lastHeartbeatTime.set(System.currentTimeMillis());
     }
@@ -55,6 +61,7 @@ public class PlayerConnection {
         this.state = state;
     }
 
+    /** @return Channel 非空且仍处于 active 时认为连接可用 */
     public boolean isActive() {
         return channel != null && channel.isActive();
     }

@@ -19,6 +19,7 @@ public class CenterConfig {
     private VersionConfig version = new VersionConfig();
     private SdkConfig sdk = new SdkConfig();
     private LoginConfig login = new LoginConfig();
+    /** 公告列表；对外接口通常只取首条映射到响应 */
     private List<AnnouncementConfig> announcements = new ArrayList<>();
 
     @Data

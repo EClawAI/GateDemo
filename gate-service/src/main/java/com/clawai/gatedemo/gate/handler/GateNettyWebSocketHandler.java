@@ -50,7 +50,10 @@ import java.util.Map;
 public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
     private static final Logger logger = LoggerFactory.getLogger(GateNettyWebSocketHandler.class);
+
+    /** Channel 属性：WebSocket 是否已完成 JWT 认证。 */
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
+    /** Channel 属性：是否在 {@link #channelActive} 中成功占用全局限流名额，断开时需释放。 */
     private static final AttributeKey<Boolean> CONNECTION_ACQUIRED = AttributeKey.valueOf("connectionAcquired");
 
     private final PlayerService playerService;
@@ -62,6 +65,12 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     private final CircuitBreaker grpcCircuitBreaker;
     private final ConnectionLimiter connectionLimiter;
 
+    /**
+     * @param perPlayerRateLimiter 按玩家（或 channel）限流，心跳消息豁免
+     * @param globalRateLimiter    全站共享桶，在认证前即生效
+     * @param grpcCircuitBreaker   Game 转发失败累积时快速拒绝
+     * @param connectionLimiter    最大并发 WebSocket/TCP 连接数
+     */
     public GateNettyWebSocketHandler(PlayerService playerService, ObjectMapper objectMapper,
                                      TokenValidator tokenValidator,
                                      MessageValidator messageValidator,
@@ -80,13 +89,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 通道激活回调
-     * 
-     * 当客户端与服务端建立 TCP 连接后调用
-     * 此时 WebSocket 握手还未完成
-     * 
-     * @param ctx Channel 上下文，包含 Channel、Pipeline 等信息
-     * @throws Exception 异常
+     * 新 TCP 连接建立时尝试占用全站连接配额；超限则 {@link Channel#close()}，否则标记 {@link #CONNECTION_ACQUIRED}。
+     *
+     * @param ctx Netty 上下文
      */
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
@@ -100,14 +105,11 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 通道读取回调
-     * 
-     * 当接收到客户端发送的消息时调用
-     * 只处理 TextWebSocketFrame 类型的消息（文本消息）
-     * 
-     * @param ctx Channel 上下文
-     * @param frame WebSocket 文本帧
-     * @throws Exception 异常
+     * 解析 JSON 为 {@link PlayerMessage}，先做结构与全局限流；未认证仅允许 {@code auth}，已认证则处理心跳/游戏消息并做玩家级限流。
+     * 可能向客户端写错误帧或关闭连接（非法类型、鉴权失败、顶号关旧连接等）。
+     *
+     * @param ctx   当前连接
+     * @param frame 文本帧负载
      */
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame frame) throws Exception {
@@ -161,8 +163,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 认证流程：从消息 body 中解析 token，JWT 验签 + 黑名单检查
-     * 客户端消息：{"type": "auth", "body": {"token": "eyJ..."}}
+     * 从 body 取 token，校验后注册玩家、顶掉同账号旧连接，并回复 {@code auth_ack}；失败则 {@code auth_fail} 并关连接。
      */
     private void handleAuth(ChannelHandlerContext ctx, PlayerMessage message) {
         String token = null;
@@ -204,6 +205,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         sendToClient(ctx, response);
     }
 
+    /**
+     * 刷新玩家在 {@link PlayerService} 中的心跳时间并回复 {@code heartbeat_ack}（无玩家绑定则忽略）。
+     */
     private void handleHeartbeat(ChannelHandlerContext ctx, PlayerMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId != null) {
@@ -217,6 +221,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         }
     }
 
+    /**
+     * 经熔断检查后转发至 Game gRPC；成功/失败分别计入熔断并可能向客户端返回 {@code GAME_UNAVAILABLE}。
+     */
     private void handleGameMessage(ChannelHandlerContext ctx, PlayerMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         Integer gameId = message.getGameId();
@@ -243,14 +250,10 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 通道空闲回调
-     * 
-     * 当 Channel 在指定时间内没有读写操作时调用
-     * 用于心跳检测和超时断开
-     * 
-     * @param ctx Channel 上下文
-     * @param evt 事件对象
-     * @throws Exception 异常
+     * 读空闲（由 Pipeline 空闲检测配置）时关闭连接，用于清理长静默会话。
+     *
+     * @param ctx 当前连接
+     * @param evt 非 {@link IdleStateEvent} 时委托父类
      */
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -269,13 +272,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 通道断开回调
-     * 
-     * 当客户端断开连接时调用
-     * 清理玩家注册信息
-     * 
-     * @param ctx Channel 上下文
-     * @throws Exception 异常
+     * 释放连接配额、注销已绑定玩家并打日志。
      */
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
@@ -297,14 +294,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 异常处理回调
-     * 
-     * 当 Channel 处理过程中发生异常时调用
-     * 记录错误日志并关闭连接
-     * 
-     * @param ctx Channel 上下文
-     * @param cause 异常对象
-     * @throws Exception 异常
+     * 记录异常并关闭 Channel，避免半开连接残留。
      */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
@@ -313,13 +303,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
     }
 
     /**
-     * 发送消息到客户端
-     * 
-     * 将 PlayerMessage 对象转换为 JSON 字符串，
-     * 然后封装为 TextWebSocketFrame 发送
-     * 
-     * @param ctx Channel 上下文
-     * @param message 要发送的消息
+     * 将 {@link PlayerMessage} 序列化为 JSON 文本帧写出；序列化失败仅打日志。
      */
     private void sendToClient(ChannelHandlerContext ctx, PlayerMessage message) {
         try {
@@ -330,6 +314,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<TextW
         }
     }
 
+    /**
+     * 下发统一错误 JSON（type=error），供限流、熔断、校验失败等场景复用。
+     */
     private void sendError(ChannelHandlerContext ctx, String code, String message) {
         try {
             String json = objectMapper.writeValueAsString(Map.of(

@@ -26,15 +26,26 @@ public class PlayerClientService {
 
     private final PlayerConfig playerConfig;
     private final ObjectMapper objectMapper;
+    /** Spring WebFlux 自带的响应式 WebSocket 客户端，与 Netty 底层兼容 */
     private final ReactorNettyWebSocketClient webSocketClient = new ReactorNettyWebSocketClient();
+    /** 阻塞主线程直至会话回调就绪，避免控制台在连接建立前启动 */
     private CountDownLatch latch;
+    /** 当前 WebSocket 会话，心跳线程与控制台通过其发送；非 volatile，依赖同线程写入后可见的用法 */
     private WebSocketSession currentSession;
 
+    /**
+     * @param playerConfig  {@code player.*} 绑定配置
+     * @param objectMapper  与网关 JSON 字段命名一致的序列化器
+     */
     public PlayerClientService(PlayerConfig playerConfig, ObjectMapper objectMapper) {
         this.playerConfig = playerConfig;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 非阻塞发起 WebSocket 执行流，等待短时闩锁后启动控制台循环。
+     * 下行在 reactive 链中解析日志，心跳在独立线程中周期性发送。
+     */
     public void connect() {
         String url = String.format("ws://%s:%d/ws", playerConfig.getHost(), playerConfig.getPort());
         logger.info("Connecting to Gate at {}", url);
@@ -108,6 +119,11 @@ public class PlayerClientService {
         }).start();
     }
 
+    /**
+     * 解析文本帧 JSON，按 {@code type} 打日志；鉴权确认与游戏下行在此分支处理。
+     *
+     * @param payload 原始文本消息体
+     */
     private void handleMessage(String payload) {
         try {
             Map<String, Object> message = objectMapper.readValue(payload, Map.class);
@@ -125,6 +141,7 @@ public class PlayerClientService {
         }
     }
 
+    /** 阻塞读取标准输入，解析 send/heartbeat/quit 指令并与当前会话交互 */
     private void startConsole() {
         Scanner scanner = new Scanner(System.in);
         System.out.println("\n=== Player Client Console ===");
@@ -153,6 +170,12 @@ public class PlayerClientService {
         }
     }
 
+    /**
+     * 组装 {@code game_msg} 并同步发送（演示用）；需会话仍打开。
+     *
+     * @param gameId  目标逻辑游戏 ID
+     * @param content 写入 body.action 的文本
+     */
     private void sendGameMessage(int gameId, String content) {
         try {
             Map<String, Object> message = Map.of(
@@ -173,6 +196,7 @@ public class PlayerClientService {
         }
     }
 
+    /** 手动触发一次心跳帧，供控制台命令调用 */
     private void sendHeartbeat() {
         try {
             Map<String, Object> message = Map.of(
@@ -189,6 +213,7 @@ public class PlayerClientService {
         }
     }
 
+    /** 关闭 WebSocket 会话并结束控制台循环 */
     private void disconnect() {
         if (currentSession != null) {
             currentSession.close();

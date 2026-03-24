@@ -50,15 +50,10 @@ public class MessageIdGenerator {
     private static final long MASK_16BIT = 0xFFFFL;
 
     /**
-     * 从消息名称生成消息ID
+     * 使用 FNV-1a 对名称做 64 位哈希并取低 16 位，相同名称稳定得到同一 ID。
      *
-     * 使用FNV-1a哈希算法：
-     * 1. 初始hash = FNV_64_INITIAL
-     * 2. 对每个字符：hash = (hash XOR char) * FNV_64_PRIME
-     * 3. 返回hash的低16位
-     *
-     * @param messageName 消息名称，格式：模块.操作（如auth.login）
-     * @return 消息ID（0-65535）
+     * @param messageName 如 {@code auth.login}；null 或空串返回 0
+     * @return 无符号意义下的 0～65535，对应 {@code short} 位型
      */
     public static short generateId(String messageName) {
         // 参数校验

@@ -62,33 +62,18 @@ public class JsonMessageBody implements MessageBody {
      */
     private Map<String, Object> data;
 
-    /**
-     * 默认构造函数
-     * 创建一个空的MessageBody，用于接收数据
-     */
+    /** 用于解码侧构造空体。 */
     public JsonMessageBody() {
     }
 
-    /**
-     * 带数据的构造函数
-     * @param data 初始数据
-     */
     public JsonMessageBody(Map<String, Object> data) {
         this.data = data;
     }
 
     /**
-     * 序列化为字节数组（用于网络传输）
+     * 将 {@link #data} 序列化为 JSON UTF-8；{@code data==null} 或序列化异常时返回空数组（调用方需容忍）。
      *
-     * 实现逻辑：
-     * 1. 检查data是否为null
-     * 2. 使用Jackson将Map转为JSON字节数组
-     * 3. 异常时返回空字节数组，避免程序崩溃
-     *
-     * 注意：返回空字节数组可能导致接收方解析失败
-     * 生产环境异常
-     *
-建议使用日志记录     * @return JSON格式的字节数组
+     * @return 字节数组，可能长度为 0
      */
     @Override
     public byte[] toBytes() {
@@ -103,14 +88,7 @@ public class JsonMessageBody implements MessageBody {
     }
 
     /**
-     * 从字节数组反序列化
-     *
-     * 实现逻辑：
-     * 1. 检查字节数组是否为空
-     * 2. 使用Jackson将JSON字节数组解析为Map
-     * 3. 异常时将data设为null
-     *
-     * @param bytes JSON格式的字节数组
+     * 自 JSON 字节解析为 Map；空数组将 {@link #data} 置 null，解析失败同样置 null。
      */
     @Override
     public void fromBytes(byte[] bytes) {
@@ -163,18 +141,10 @@ public class JsonMessageBody implements MessageBody {
         }
     }
 
-    /**
-     * 获取消息数据
-     * @return 消息数据的Map引用
-     */
     public Map<String, Object> getData() {
         return data;
     }
 
-    /**
-     * 设置消息数据
-     * @param data 消息数据
-     */
     public void setData(Map<String, Object> data) {
         this.data = data;
     }

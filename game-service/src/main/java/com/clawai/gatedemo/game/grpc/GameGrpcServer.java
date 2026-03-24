@@ -19,69 +19,54 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Game gRPC 服务端（Game 服务使用）
- * 
- * 功能说明：
- * 1. 监听 gRPC 端口，接受 Gate 服务的连接
- * 2. 处理游戏消息转发
- * 3. 维护双向流心跳
- * 4. 支持Stream双向流通信
- * 
- * 架构说明：
- * ┌─────────────────────────────────────────┐
- * │           Game gRPC Server              │
- * │                                         │
- * │  Port: 9090                             │
- * │    ↓ 接受 gRPC 连接                       │
- * │  GameServiceImpl                        │
- * │    ├─ SendGameMessage - 处理游戏消息    │
- * │    ├─ StreamCommunication - Stream双向流│
- * │    └─ Heartbeat - 处理心跳              │
- * └─────────────────────────────────────────┘
- * 
- * @author clawAI
- * @since 2026-03-06
+ * Game 侧 gRPC 服务端：监听端口、注册 {@link GameServiceGrpc} 实现与健康检查；支持 Unary、双向流业务消息与心跳流。
+ * <p>
+ * 启用 TLS 时通过 {@code grpc.tls.*} 加载证书与私钥；关闭时优雅 shutdown 并更新健康状态为 NOT_SERVING。
  */
 @Component
 public class GameGrpcServer {
 
     private static final Logger logger = LoggerFactory.getLogger(GameGrpcServer.class);
 
-    /**
-     * Game 服务 ID，从配置文件读取
-     * 默认值：1001
-     */
+    /** 逻辑游戏 ID（日志展示；与 {@code game.id} 字符串配置可能同源不同形态）。 */
     @Value("${game.id:1001}")
     private int gameId;
 
-    /**
-     * gRPC 服务端口，从配置文件读取
-     * 默认值：9090
-     */
+    /** gRPC 绑定端口。 */
     @Value("${grpc.port:9090}")
     private int grpcPort;
 
+    /** 是否为服务端连接启用 TLS。 */
     @Value("${grpc.tls.enabled:false}")
     private boolean tlsEnabled;
 
+    /** PEM 证书路径（TLS 开启时与 key 同时使用）。 */
     @Value("${grpc.tls.cert-path:}")
     private String tlsCertPath;
 
+    /** PEM 私钥路径。 */
     @Value("${grpc.tls.key-path:}")
     private String tlsKeyPath;
 
     private io.grpc.Server server;
+    /** gRPC 标准健康检查服务所用状态管理器。 */
     private HealthStatusManager healthManager;
     private final GameMessageHandler gameMessageHandler;
     private final ObjectMapper objectMapper;
 
+    /**
+     * @param gameMessageHandler 处理 Unary/流式游戏消息
+     * @param objectMapper       下行 body 序列化
+     */
     public GameGrpcServer(GameMessageHandler gameMessageHandler, ObjectMapper objectMapper) {
         this.gameMessageHandler = gameMessageHandler;
         this.objectMapper = objectMapper;
     }
 
     /**
-     * 启动 gRPC 服务器
+     * 构建并启动 gRPC Server、注册业务服务与健康检查；可选加载 TLS；注册 JVM shutdown 以调用 {@link #stop()}。
+     *
+     * @throws IOException 绑定端口或 TLS 文件读取失败时抛出
      */
     @PostConstruct
     public void start() throws IOException {
@@ -262,6 +247,7 @@ public class GameGrpcServer {
             logger.info("💓 gRPC 心跳流已建立");
 
             return new StreamObserver<HeartbeatRequest>() {
+                /** 回写 code=0 与当前服务端时间戳。 */
                 @Override
                 public void onNext(HeartbeatRequest request) {
                     logger.debug("💓 收到心跳：gateId={}, timestamp={}", request.getGateId(), request.getTimestamp());
@@ -275,12 +261,14 @@ public class GameGrpcServer {
                     responseObserver.onNext(response);
                 }
 
+                /** 连接异常或取消时告警日志。 */
                 @Override
                 public void onError(Throwable t) {
                     // 客户端取消导致的错误是正常的，不打印error
                     logger.warn("⚠️ 心跳流断开：{} (客户端可能已断开)", t.getMessage());
                 }
 
+                /** 对端正常结束流。 */
                 @Override
                 public void onCompleted() {
                     logger.info("🔚 心跳流完成");

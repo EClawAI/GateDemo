@@ -9,10 +9,15 @@ import lombok.Data;
 public class LoginResponse {
     private GateInfo gate;
     private Integer gameId;
+    /** 直连游戏服时的主机，与 {@link #gate} 二选一或补充使用 */
     private String gameHost;
+    /** 直连游戏服时的端口 */
     private Integer gamePort;
+    /** 是否因上次服不可用而切换到推荐服 */
     private Boolean redirect;
+    /** 切换服时展示给玩家的提示文案 */
     private String redirectMessage;
+    /** 供网关或游戏服校验的玩家 JWT */
     private String token;
 
     @Data

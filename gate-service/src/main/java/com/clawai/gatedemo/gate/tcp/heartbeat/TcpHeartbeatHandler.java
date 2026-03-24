@@ -23,10 +23,16 @@ public class TcpHeartbeatHandler extends IdleStateHandler {
         HEARTBEAT_MSG_ID = MessageIdRegistry.getIdByName("heartbeat");
     }
 
+    /**
+     * @param readerIdleTimeSeconds 读空闲超过该秒数触发 {@link #channelIdle}
+     */
     public TcpHeartbeatHandler(int readerIdleTimeSeconds) {
         super(readerIdleTimeSeconds, 0, 0, TimeUnit.SECONDS);
     }
 
+    /**
+     * 读空闲时关闭连接；其他 idle 类型交父类默认行为。
+     */
     @Override
     protected void channelIdle(ChannelHandlerContext ctx, IdleStateEvent evt) throws Exception {
         if (evt.state() == IdleState.READER_IDLE) {

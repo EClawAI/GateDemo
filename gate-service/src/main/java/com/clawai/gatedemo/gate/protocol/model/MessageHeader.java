@@ -183,6 +183,7 @@ public class MessageHeader {
     public int getRequestId() { return requestId; }
     public void setRequestId(int requestId) { this.requestId = requestId; }
 
+    /** 输出 flags、序号、模式等可读摘要，供日志使用。 */
     @Override
     public String toString() {
         String modeStr = switch (getMode()) {

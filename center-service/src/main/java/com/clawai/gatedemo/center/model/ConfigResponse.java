@@ -15,6 +15,12 @@ public class ConfigResponse {
     private LoginInfo login;
     private AnnouncementInfo announcement;
 
+    /**
+     * 将 {@link CenterConfig} 映射为对外 DTO：公告仅取配置列表首条（若存在）。
+     *
+     * @param config 运行时中心配置
+     * @return 填充后的响应对象
+     */
     public static ConfigResponse fromConfig(CenterConfig config) {
         ConfigResponse response = new ConfigResponse();
         

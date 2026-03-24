@@ -45,6 +45,7 @@ public class PlayerMessage {
     public Long getTimestamp() { return timestamp; }
     public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
 
+    /** 调试输出主要字段，不含完整 body。 */
     @Override
     public String toString() {
         return "PlayerMessage{" +

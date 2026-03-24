@@ -20,9 +20,7 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Netty TCP Server - Spring-managed component with enable/disable switch.
- * Listens on gate.tcp.port when gate.tcp.enabled is true.
- * Reuses binary protocol handlers (GameMessageDecoder/Encoder, TcpMessageHandler).
+ * Netty TCP 接入：{@code gate.tcp.enabled=true} 时监听 {@code gate.tcp.port}，复用二进制编解码与 {@link TcpMessageHandler}。
  */
 @Component
 @ConditionalOnProperty(name = "gate.tcp.enabled", havingValue = "true")
@@ -37,11 +35,20 @@ public class NettyTcpServer {
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
 
+    /**
+     * @param gateConfig        TCP 端口等
+     * @param tcpMessageHandler 业务入站处理
+     */
     public NettyTcpServer(GateConfig gateConfig, TcpMessageHandler tcpMessageHandler) {
         this.gateConfig = gateConfig;
         this.tcpMessageHandler = tcpMessageHandler;
     }
 
+    /**
+     * 同步 bind 端口；pipeline 含读空闲、心跳、编解码与业务 handler。
+     *
+     * @throws InterruptedException {@link ChannelFuture#sync()} 被中断
+     */
     @PostConstruct
     public void start() throws InterruptedException {
         int port = gateConfig.getTcp().getPort();
@@ -71,6 +78,7 @@ public class NettyTcpServer {
         logger.info("TCP Server started on port {}", port);
     }
 
+    /** 关闭服务端 Channel 与线程组。 */
     @PreDestroy
     public void stop() {
         if (serverChannel != null) {

@@ -8,6 +8,7 @@ import java.util.Map;
  */
 public class MessageIdRegistry {
 
+    /** 静态注册表，类加载完成后只读，多线程安全读取 */
     private static final Map<Short, String> ID_TO_NAME = new HashMap<>();
     private static final Map<String, Short> NAME_TO_ID = new HashMap<>();
 
@@ -28,11 +29,23 @@ public class MessageIdRegistry {
         ID_TO_NAME.put(id, name);
     }
 
+    /**
+     * 按消息名解析短 ID；未在表中登记时回退 {@link MessageIdGenerator#generateId(String)}，保证扩展消息可互通。
+     *
+     * @param name 逻辑消息名
+     * @return 对应的 16 位消息 ID
+     */
     public static short getIdByName(String name) {
         Short id = NAME_TO_ID.get(name);
         return id != null ? id : MessageIdGenerator.generateId(name);
     }
 
+    /**
+     * 由短 ID 反查注册名；仅覆盖静态表内条目，未知 ID 返回 {@code null}。
+     *
+     * @param id 消息 ID
+     * @return 注册时的消息名，未注册则为 null
+     */
     public static String getNameById(short id) {
         return ID_TO_NAME.get(id);
     }

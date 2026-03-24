@@ -17,6 +17,9 @@ public class ConnectionLimiter {
     private final int maxConnections;
     private final AtomicInteger activeCount = new AtomicInteger(0);
 
+    /**
+     * @param maxConnections 并发连接上限，由配置 {@code gate.max-connections} 注入
+     */
     public ConnectionLimiter(@Value("${gate.max-connections:10000}") int maxConnections) {
         this.maxConnections = maxConnections;
     }

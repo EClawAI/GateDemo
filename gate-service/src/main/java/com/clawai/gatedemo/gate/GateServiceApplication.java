@@ -10,6 +10,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 public class GateServiceApplication {
+
+    /**
+     * 启动网关 Spring 应用，注册 Bean 与调度器（含 {@link org.springframework.scheduling.annotation.EnableScheduling}）。
+     *
+     * @param args 命令行参数，原样传给 {@link SpringApplication#run}
+     */
     public static void main(String[] args) {
         SpringApplication.run(GateServiceApplication.class, args);
     }

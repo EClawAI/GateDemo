@@ -17,6 +17,7 @@ public class LoginConfig {
 
     private ServerConfig server = new ServerConfig();
     private RedisConfig redis = new RedisConfig();
+    /** 推荐服列表，供无上次可用服时的路由兜底；priority 越小越优先 */
     private List<RecommendGameConfig> recommendGames = new ArrayList<>();
 
     @Data
@@ -36,6 +37,7 @@ public class LoginConfig {
     public static class RecommendGameConfig {
         private int gameId;
         private String name;
+        /** 路由时的排序权重，数值越小优先级越高 */
         private int priority = 1;
     }
 }

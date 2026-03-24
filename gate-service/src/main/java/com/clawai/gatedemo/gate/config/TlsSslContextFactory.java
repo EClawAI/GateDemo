@@ -17,6 +17,13 @@ public class TlsSslContextFactory {
 
     private static final Logger logger = LoggerFactory.getLogger(TlsSslContextFactory.class);
 
+    /**
+     * 按配置构造服务端 {@link SslContext}：优先 PEM（cert+key），否则 PKCS12 keystore；均未配置则抛异常。
+     *
+     * @param tlsConfig 证书路径与 keystore 密码等
+     * @return 可用于 Netty pipeline 的 TLS 上下文
+     * @throws Exception 读文件或加载密钥库失败
+     */
     public static SslContext buildServerContext(GateConfig.TlsConfig tlsConfig) throws Exception {
         if (tlsConfig.getCertPath() != null && tlsConfig.getKeyPath() != null) {
             logger.info("Loading TLS certs from PEM: cert={}, key={}", tlsConfig.getCertPath(), tlsConfig.getKeyPath());

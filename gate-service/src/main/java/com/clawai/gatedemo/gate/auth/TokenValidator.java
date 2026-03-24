@@ -16,14 +16,21 @@ public class TokenValidator {
     private final TokenService tokenService;
     private final TokenBlacklistService blacklistService;
 
+    /**
+     * @param tokenService       JWT 验签
+     * @param blacklistService   Redis 黑名单（登出/吊销）
+     */
     public TokenValidator(TokenService tokenService, TokenBlacklistService blacklistService) {
         this.tokenService = tokenService;
         this.blacklistService = blacklistService;
     }
 
     /**
-     * 验证 token 是否有效（JWT 验签 + 黑名单检查）
-     * @return playerId if valid, null if invalid
+     * 综合校验：JWT 合法、未进黑名单，且 subject 可解析为玩家 ID。
+     * 会访问 Redis（黑名单查询）并解析 JWT，不修改连接或会话状态。
+     *
+     * @param token Bearer 内完整 token；null 或空白返回 null
+     * @return 成功返回玩家 ID；任一环节失败返回 null
      */
     public Long validate(String token) {
         if (token == null || token.isBlank()) {

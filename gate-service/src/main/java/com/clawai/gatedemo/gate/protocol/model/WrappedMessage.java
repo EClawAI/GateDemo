@@ -51,74 +51,39 @@ public class WrappedMessage {
      */
     private MessageBody body;
 
-    /**
-     * 默认构造函数
-     * 创建一个空消息，常用于接收数据
-     * 自动创建默认的Header和Body
-     */
+    /** 预置空 {@link MessageHeader} 与 {@link JsonMessageBody}，便于解码填充。 */
     public WrappedMessage() {
         this.header = new MessageHeader();
         this.body = new JsonMessageBody();
     }
 
-    /**
-     * 完全构造函数
-     * @param header 消息头
-     * @param body 消息体
-     */
     public WrappedMessage(MessageHeader header, MessageBody body) {
         this.header = header;
         this.body = body;
     }
 
-    /**
-     * 简化的构造函数
-     * 只需要指定消息ID和消息体时使用
-     * @param messageId 消息ID
-     * @param body 消息体
-     */
+    /** 仅指定消息类型 ID 时常用，头其余字段由后续逻辑补全。 */
     public WrappedMessage(short messageId, MessageBody body) {
         this.header = new MessageHeader(messageId);
         this.body = body;
     }
 
-    /**
-     * 获取消息头
-     * @return 消息头引用
-     */
     public MessageHeader getHeader() {
         return header;
     }
 
-    /**
-     * 设置消息头
-     * @param header 消息头
-     */
     public void setHeader(MessageHeader header) {
         this.header = header;
     }
 
-    /**
-     * 获取消息体
-     * @return 消息体引用
-     */
     public MessageBody getBody() {
         return body;
     }
 
-    /**
-     * 设置消息体
-     * @param body 消息体
-     */
     public void setBody(MessageBody body) {
         this.body = body;
     }
 
-    /**
-     * 转换为字符串表示
-     * 用于日志和调试
-     * @return 字符串形式的消息
-     */
     @Override
     public String toString() {
         return "WrappedMessage{" +

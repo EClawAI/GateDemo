@@ -13,6 +13,11 @@ import java.util.Map;
 @RestController
 public class HealthController {
 
+    /**
+     * 进程存活探针，不检查外部依赖。
+     *
+     * @return {@code status=UP} 与 HTTP 200
+     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> result = new LinkedHashMap<>();

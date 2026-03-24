@@ -34,8 +34,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Lightweight Netty HTTP server for health checks.
- * Exposes GET /health and GET /ready endpoints.
+ * 轻量 Netty HTTP 服务：提供 {@code /health}、{@code /ready} 探活及 {@code /metrics} Prometheus 抓取。
  */
 @Component
 public class HealthCheckHttpServer {
@@ -52,6 +51,13 @@ public class HealthCheckHttpServer {
     private NioEventLoopGroup workerGroup;
     private Channel channel;
 
+    /**
+     * @param gateConfig              健康检查监听端口等
+     * @param redisTemplate           探活 Redis
+     * @param grpcPool                探活 gRPC 连接池是否非空
+     * @param objectMapper            健康 JSON 序列化
+     * @param prometheusMeterRegistry {@code /metrics} 文本输出
+     */
     public HealthCheckHttpServer(GateConfig gateConfig, RedisTemplate<String, Object> redisTemplate,
                                   GameGrpcClientPool grpcPool, ObjectMapper objectMapper,
                                   PrometheusMeterRegistry prometheusMeterRegistry) {
@@ -62,6 +68,9 @@ public class HealthCheckHttpServer {
         this.prometheusMeterRegistry = prometheusMeterRegistry;
     }
 
+    /**
+     * 绑定健康端口；启动失败会中断当前线程标志位并调用 {@link #shutdown()}。
+     */
     @PostConstruct
     public void start() {
         int port = gateConfig.getHealth().getPort();
@@ -92,11 +101,15 @@ public class HealthCheckHttpServer {
         }
     }
 
+    /**
+     * Spring 销毁阶段关闭 Channel 与线程组。
+     */
     @PreDestroy
     public void stop() {
         shutdown();
     }
 
+    /** 释放监听与 EventLoop 资源，可重复调用。 */
     private void shutdown() {
         if (channel != null) {
             channel.close();
@@ -113,6 +126,9 @@ public class HealthCheckHttpServer {
         logger.info("Health check HTTP server stopped");
     }
 
+    /**
+     * @return {@code status} 与 {@code components}（redis、grpcPool、grpcConnections）；全部 UP 时整体为 UP
+     */
     private Map<String, Object> computeHealth() {
         Map<String, Object> components = new HashMap<>();
         String redisStatus = checkRedis();
@@ -132,6 +148,7 @@ public class HealthCheckHttpServer {
         return result;
     }
 
+    /** @return {@code UP} / {@code DOWN}，异常时记 debug 日志 */
     private String checkRedis() {
         try {
             RedisConnection conn = redisTemplate.getConnectionFactory().getConnection();
@@ -147,6 +164,7 @@ public class HealthCheckHttpServer {
         }
     }
 
+    /** 以池中是否存在至少一条连接作为粗略就绪信号。 */
     private String checkGrpcPool() {
         return grpcPool.getPoolSize() > 0 ? "UP" : "DOWN";
     }
@@ -159,6 +177,9 @@ public class HealthCheckHttpServer {
             this.prometheusMeterRegistry = prometheusMeterRegistry;
         }
 
+        /**
+         * 路由 {@code /metrics} 返回 Prometheus 文本；{@code /ready} 依赖聚合健康；{@code /health} 恒 200 但 body 含组件状态。
+         */
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
             String path = req.uri().split("\\?")[0];

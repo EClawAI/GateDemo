@@ -19,8 +19,10 @@ public class MessageDispatcher {
     private static final Logger logger = LoggerFactory.getLogger(MessageDispatcher.class);
 
     private final HandlerRegistry registry;
+    /** 异步分发使用的固定大小线程池（守护线程） */
     private final ExecutorService executor;
 
+    /** 创建注册表、线程池并注册默认鉴权/心跳占位处理器。 */
     public MessageDispatcher() {
         this.registry = new HandlerRegistry();
         this.executor = Executors.newFixedThreadPool(4, r -> {
@@ -36,11 +38,18 @@ public class MessageDispatcher {
         register((short) 0x2001, new HeartbeatHandler());
     }
 
+    /**
+     * @param messageId 消息号
+     * @param handler   业务处理器
+     */
     public void register(short messageId, MessageHandler handler) {
         registry.register(messageId, handler);
         logger.info("Registered handler for messageId: {}", messageId);
     }
 
+    /**
+     * 在当前线程同步派发：先 {@link MessageHandler#shouldHandle(WrappedMessage)}，再 {@link MessageHandler#handle(io.netty.channel.ChannelHandlerContext, WrappedMessage)}；异常记日志不向外抛。
+     */
     public void dispatch(ChannelHandlerContext ctx, WrappedMessage message) {
         if (message == null || message.getHeader() == null) {
             return;
@@ -63,10 +72,12 @@ public class MessageDispatcher {
         }
     }
 
+    /** 将 {@link #dispatch} 提交到线程池，避免阻塞 Netty IO 线程。 */
     public void dispatchAsync(ChannelHandlerContext ctx, WrappedMessage message) {
         executor.execute(() -> dispatch(ctx, message));
     }
 
+    /** @return 内部使用的注册表，可供外部继续 register */
     public HandlerRegistry getRegistry() {
         return registry;
     }

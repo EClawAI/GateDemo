@@ -21,9 +21,12 @@ public class PlayerData implements BaseEntity<Long> {
     private long gold;
     private int diamond;
     private int vipLevel;
+    /** 创角时间戳（毫秒）。 */
     private long createTime;
+    /** 最近一次登录时间戳（毫秒）。 */
     private long lastLoginTime;
     private int loginCount;
+    /** 背包道具列表，与 MongoDB 嵌套文档映射。 */
     private List<ItemData> items;
 
     public PlayerData() {

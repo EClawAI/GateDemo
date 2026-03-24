@@ -12,8 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Input validation for PlayerMessage fields.
- * Validates type, playerId, gameId, msgType length, and body size.
+ * 对 {@link PlayerMessage} 做入站校验：type 白名单、game_msg 必填字段、msgType 长度与 body 序列化后体积。
  */
 @Component
 public class MessageValidator {
@@ -28,6 +27,11 @@ public class MessageValidator {
     private final int msgTypeMaxLength;
     private final int bodyMaxBytes;
 
+    /**
+     * @param objectMapper   将 body 序列化为字节以估算大小
+     * @param msgTypeMaxLength {@code gate.message.msg-type-max-length}
+     * @param bodyMaxBytes     {@code gate.message.max-length}，单条 body 上限（字节）
+     */
     public MessageValidator(ObjectMapper objectMapper,
                             @Value("${gate.message.msg-type-max-length:64}") int msgTypeMaxLength,
                             @Value("${gate.message.max-length:65536}") int bodyMaxBytes) {
@@ -37,7 +41,8 @@ public class MessageValidator {
     }
 
     /**
-     * Validates PlayerMessage. Returns null if valid, or error message if invalid.
+     * @param message 待校验消息
+     * @return 合法返回 null，否则为简短错误描述（与实现返回文案一致，便于日志或回包）
      */
     public String validate(PlayerMessage message) {
         if (message == null) {

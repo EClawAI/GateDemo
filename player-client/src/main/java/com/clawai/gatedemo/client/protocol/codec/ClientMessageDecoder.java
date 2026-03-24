@@ -80,6 +80,12 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
         out.add(message);
     }
 
+    /**
+     * zlib 解压载荷；失败或空结果返回 {@code null}，由调用方记录并中止本帧处理。
+     *
+     * @param data 压缩后的体字节
+     * @return 解压后的 JSON 体字节，失败为 null
+     */
     private byte[] decompress(byte[] data) {
         Inflater inflater = new Inflater();
         inflater.setInput(data);

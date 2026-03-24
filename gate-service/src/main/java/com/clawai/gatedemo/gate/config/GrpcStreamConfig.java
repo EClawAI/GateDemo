@@ -14,23 +14,34 @@ import jakarta.annotation.PostConstruct;
 import java.util.Map;
 
 /**
- * Configures gRPC stream message handling: forwards Game responses (echo/broadcast) to players.
+ * 配置 gRPC 流式回调：将 Game 经双向流回推的消息（单播 echo / 广播）转为 {@link PlayerMessage} 并下发给 WebSocket 玩家。
  */
 @Configuration
 public class GrpcStreamConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(GrpcStreamConfig.class);
 
+    /** 与 Game 的 gRPC 连接池，在此注册 stream 消息处理器 */
     private final GameGrpcClientPool pool;
+    /** 在线玩家与下行发送 */
     private final PlayerService playerService;
+    /** 将 Game 消息体 JSON 反序列化为 Map */
     private final ObjectMapper objectMapper;
 
+    /**
+     * @param pool           用于设置流回调的客户端池
+     * @param playerService  向指定玩家或全量在线玩家推送
+     * @param objectMapper   解析回推 body 字符串
+     */
     public GrpcStreamConfig(GameGrpcClientPool pool, PlayerService playerService, ObjectMapper objectMapper) {
         this.pool = pool;
         this.playerService = playerService;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 向连接池注册流消息处理器：playerId 大于 0 时单播，否则遍历在线玩家广播；解析失败仅打日志，不抛出。
+     */
     @PostConstruct
     public void init() {
         pool.setStreamMessageHandler(message -> {

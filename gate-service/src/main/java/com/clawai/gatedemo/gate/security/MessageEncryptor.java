@@ -13,8 +13,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 /**
- * AES-GCM encryption/decryption utility for message body.
- * Configurable via gate.security.encryption.enabled and gate.security.encryption.key.
+ * 消息体 AES-GCM 加解密工具；密钥由配置 {@code gate.security.encryption.key} 等提供（启用开关由上层控制）。
  */
 public class MessageEncryptor {
 
@@ -28,7 +27,7 @@ public class MessageEncryptor {
     private final SecretKey secretKey;
 
     /**
-     * @param secretKeyString Base64 or raw string; will be hashed/padded to 16 bytes if needed
+     * @param secretKeyString 原始或 Base64 字符串；不足 16 字节补零，超过则截断为 16 字节 AES key
      */
     public MessageEncryptor(String secretKeyString) {
         byte[] keyBytes = deriveKey(secretKeyString);
@@ -54,7 +53,10 @@ public class MessageEncryptor {
     }
 
     /**
-     * Encrypt plainText with AES-GCM. Output format: Base64(IV || ciphertext || tag).
+     * AES-GCM 加密明文，每次随机 IV；输出为 Base64(IV ‖ 密文 ‖ tag)。
+     *
+     * @return Base64 字符串；plainText 为 null 时返回 null
+     * @throws RuntimeException 底层 Cipher 失败
      */
     public String encrypt(String plainText) {
         if (plainText == null) {
@@ -83,7 +85,10 @@ public class MessageEncryptor {
     }
 
     /**
-     * Decrypt Base64(IV || ciphertext || tag) to plain text.
+     * 解密 {@link #encrypt(String)} 生成的 Base64 串。
+     *
+     * @return 明文；空串或 null 返回 null
+     * @throws RuntimeException 格式非法或认证失败
      */
     public String decrypt(String cipherText) {
         if (cipherText == null || cipherText.isEmpty()) {

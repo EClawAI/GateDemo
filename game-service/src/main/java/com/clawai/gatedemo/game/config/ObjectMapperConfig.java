@@ -5,20 +5,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * ObjectMapper 配置
- * 
- * 提供 JSON 序列化工具 Bean
- * 
- * @author clawAI
- * @since 2026-03-06
+ * 提供应用级 {@link ObjectMapper} Bean，供消息体 JSON 解析、gRPC 与 Redis 序列化等注入使用。
  */
 @Configuration
 public class ObjectMapperConfig {
 
     /**
-     * 创建 ObjectMapper Bean
-     * 
-     * @return 配置好的 ObjectMapper 实例
+     * 默认配置的 Jackson 实例；需定制模块或日期格式时可在此集中调整。
+     *
+     * @return 单例 ObjectMapper
      */
     @Bean
     public ObjectMapper objectMapper() {

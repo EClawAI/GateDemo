@@ -10,8 +10,11 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "game")
 public class GameConfig {
 
+    /** 本 Game 实例标识，常用于解析数值 gameId、Redis 键后缀等。 */
     private String id = "game-1001";
+    /** 注册到 Redis 等对外宣告的可达主机名或 IP。 */
     private String host = "localhost";
+    /** gRPC 等服务对外监听端口（与注册信息中的 port 一致）。 */
     private int port = 9090;
     private RedisConfig redis = new RedisConfig();
     private StatusConfig status = new StatusConfig();
@@ -21,6 +24,7 @@ public class GameConfig {
         private String host = "localhost";
         private int port = 6379;
         private String password = "";
+        /** Redis 逻辑库编号。 */
         private int database = 0;
 
         public String getHost() { return host; }
@@ -34,6 +38,7 @@ public class GameConfig {
     }
 
     public static class StatusConfig {
+        /** 向 Redis 同步游戏状态的心跳间隔（毫秒），可由 {@code game.status.heartbeat-interval} 覆盖调度。 */
         private int heartbeatInterval = 30000;
 
         public int getHeartbeatInterval() { return heartbeatInterval; }
@@ -41,8 +46,11 @@ public class GameConfig {
     }
 
     public static class RegistryConfig {
+        /** 是否向 Redis 注册本实例并发送心跳。 */
         private boolean enabled = true;
+        /** 注册键的生存时间（秒），需小于或配合心跳续期。 */
         private int ttlSeconds = 60;
+        /** 注册续期/心跳任务间隔（毫秒）。 */
         private int heartbeatInterval = 30000;
 
         public boolean isEnabled() { return enabled; }

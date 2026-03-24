@@ -11,15 +11,20 @@ import java.util.Date;
 import java.util.UUID;
 
 /**
- * JWT 签发服务：login-service 负责签发，gate-service 负责验签
- * 两端共享相同的 secret key
+ * JWT 签发：由登录服务生成令牌，网关服务使用同一密钥验签。
  */
 @Service
 public class JwtTokenService {
 
+    /** HMAC 签名用密钥材料 */
     private final SecretKey secretKey;
+    /** 令牌有效期（秒） */
     private final long expireSeconds;
 
+    /**
+     * @param secret        HMAC 密钥字符串，须与网关配置一致
+     * @param expireSeconds 签发令牌的有效时长（秒）
+     */
     public JwtTokenService(
             @Value("${login.jwt.secret:DefaultGateDemoSecretKeyForHMACSHA256Auth!}") String secret,
             @Value("${login.jwt.expire-seconds:7200}") long expireSeconds) {
@@ -40,6 +45,9 @@ public class JwtTokenService {
                 .compact();
     }
 
+    /**
+     * @return 当前配置的令牌过期秒数，供外部展示或对齐客户端逻辑
+     */
     public long getExpireSeconds() {
         return expireSeconds;
     }

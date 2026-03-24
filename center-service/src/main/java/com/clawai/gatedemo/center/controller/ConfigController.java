@@ -20,10 +20,18 @@ public class ConfigController {
 
     private final CenterConfig centerConfig;
 
+    /**
+     * @param centerConfig 需聚合下发的中心侧配置
+     */
     public ConfigController(CenterConfig centerConfig) {
         this.centerConfig = centerConfig;
     }
 
+    /**
+     * 将中心配置转换为客户端协议形态的 {@link ConfigResponse}。
+     *
+     * @return 统一成功包装下的完整配置视图
+     */
     @GetMapping("/config")
     public ApiResponse<ConfigResponse> getConfig() {
         logger.info("收到配置请求");

@@ -7,8 +7,12 @@ import lombok.Data;
  */
 @Data
 public class GateHeartbeatRequest {
+    /** 网关实例唯一标识 */
     private String gateId;
+    /** 客户端可连接的网关主机 */
     private String host;
+    /** 网关对外端口 */
     private Integer port;
+    /** 当前网关上的在线连接数，用于低负载选路 */
     private Integer online;
 }

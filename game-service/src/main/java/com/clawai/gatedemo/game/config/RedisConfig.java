@@ -17,10 +17,16 @@ public class RedisConfig {
 
     private final GameConfig gameConfig;
 
+    /** @param gameConfig 读取 {@code game.redis.*} 连接参数 */
     public RedisConfig(GameConfig gameConfig) {
         this.gameConfig = gameConfig;
     }
 
+    /**
+     * 基于 {@link GameConfig#getRedis()} 构建单机 Lettuce 连接工厂；密码非空时启用认证。
+     *
+     * @return 可注入到 {@link RedisTemplate} 的连接工厂
+     */
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -33,6 +39,12 @@ public class RedisConfig {
         return new LettuceConnectionFactory(config);
     }
 
+    /**
+     * String 键 + JSON 值（含 Hash）的通用模板，供注册表、状态键等读写。
+     *
+     * @param connectionFactory Redis 连接
+     * @return 已 {@code afterPropertiesSet} 的模板
+     */
     @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();

@@ -31,9 +31,15 @@ public class GameRouteService {
         this.gateService = gateService;
     }
 
+    /**
+     * 游戏服生命周期状态，与 Redis 中写入的数值编码一致。
+     */
     public enum GameStatus {
+        /** 未开服或不可进 */
         NOT_STARTED(0),
+        /** 已开服但尚未开放登录 */
         STARTED_NOT_LOGIN(1),
+        /** 已开服且允许玩家登录 */
         STARTED_CAN_LOGIN(2);
 
         private final int value;
@@ -46,6 +52,10 @@ public class GameRouteService {
             return value;
         }
 
+        /**
+         * @param value Redis 或配置中的整型状态码
+         * @return 匹配项，未知时视为 {@link #NOT_STARTED}
+         */
         public static GameStatus fromValue(int value) {
             for (GameStatus status : values()) {
                 if (status.value == value) {
@@ -56,6 +66,12 @@ public class GameRouteService {
         }
     }
 
+    /**
+     * 从 Redis 解析指定游戏的当前状态；异常或缺键时视为未开服。
+     *
+     * @param gameId 游戏 ID，{@code null} 时返回 {@link GameStatus#NOT_STARTED}
+     * @return 解析后的枚举状态
+     */
     public GameStatus getGameStatus(Integer gameId) {
         if (gameId == null) {
             return GameStatus.NOT_STARTED;
@@ -111,6 +127,12 @@ public class GameRouteService {
         return null;
     }
 
+    /**
+     * 写入玩家最近游戏并设置过期，供下次登录优先匹配。
+     *
+     * @param playerId 玩家 ID
+     * @param gameId   本次进入的游戏 ID
+     */
     public void savePlayerLoginRecord(Long playerId, Integer gameId) {
         String key = PLAYER_LASTGAME_KEY_PREFIX + playerId;
         String value = gameId + ":" + System.currentTimeMillis();
@@ -118,6 +140,12 @@ public class GameRouteService {
         logger.info("Player {} login record saved, gameId: {}", playerId, gameId);
     }
 
+    /**
+     * 综合可用网关、玩家上次游戏与推荐服及游戏状态，决定目标游戏与网关；必要时标记换服提示。
+     *
+     * @param playerId 待路由的玩家 ID
+     * @return {@code code=0} 表示成功并含网关与游戏信息；非 0 为业务错误（如无可用网关/游戏）
+     */
     public RouteResult route(Long playerId) {
         RouteResult result = new RouteResult();
         
@@ -181,6 +209,7 @@ public class GameRouteService {
         return result;
     }
 
+    /** 单次登录路由的输出：业务码、网关端点、目标游戏及是否向玩家展示换服说明 */
     public static class RouteResult {
         private int code;
         private String message;

@@ -15,8 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Jakarta Servlet Filter that validates X-API-Key header.
- * Skips health endpoints. Disabled when login.security.api-key is empty.
+ * 校验请求头 {@code X-API-Key}；健康检查与 Actuator 路径放行；未配置密钥时不启用校验。
  */
 @Component
 @Order(1)
@@ -26,9 +25,17 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
     private static final String HEADER_X_API_KEY = "X-API-Key";
 
+    /** 与网关/调用方约定的静态 API 密钥，空串表示关闭过滤 */
     @Value("${login.security.api-key:}")
     private String configuredApiKey;
 
+    /**
+     * 未配置密钥则直接放行；否则除健康路径外必须携带正确 {@code X-API-Key}。
+     *
+     * @param request     当前请求
+     * @param response    校验失败时写 401 与 JSON 错误体
+     * @param filterChain 通过后继续过滤器链
+     */
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,

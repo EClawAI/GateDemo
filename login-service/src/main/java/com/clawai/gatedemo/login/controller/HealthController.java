@@ -20,10 +20,18 @@ public class HealthController {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    /**
+     * @param redisTemplate 用于探测 Redis 连通性的模板
+     */
     public HealthController(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
+    /**
+     * 返回整体状态与 Redis 子组件状态；任一下线则 HTTP 503。
+     *
+     * @return {@code status}、{@code components.redis} 及对应 HTTP 状态码
+     */
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> result = new LinkedHashMap<>();

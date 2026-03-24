@@ -5,7 +5,9 @@ package com.clawai.gatedemo.game.model;
  */
 public class ItemData {
 
+    /** 道具配置 ID。 */
     private int itemId;
+    /** 持有数量。 */
     private int count;
 
     public ItemData() {

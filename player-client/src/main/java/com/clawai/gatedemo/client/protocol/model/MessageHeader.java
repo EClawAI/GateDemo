@@ -11,8 +11,11 @@ public class MessageHeader {
     private int bodyLength;
     private int requestId;
 
+    /** 体经 zlib 等压缩时置位，与解码侧解压逻辑对应 */
     public static final int FLAG_COMPRESSED = 0x8000;
+    /** 预留加密标志，当前演示客户端未实现加解密 */
     public static final int FLAG_ENCRYPTED = 0x4000;
+    /** 请求/响应/推送模式占用的 flags 位段 */
     public static final int FLAG_MASK_MODE = 0x00C0;
 
     public static final short MODE_REQUEST = 0x0000;
@@ -22,10 +25,14 @@ public class MessageHeader {
     public MessageHeader() {
     }
 
+    /**
+     * @param messageId 业务短消息 ID，其余字段默认零
+     */
     public MessageHeader(short messageId) {
         this.messageId = messageId;
     }
 
+    /** @return 是否携带压缩标志位 */
     public boolean isCompressed() {
         return (flags & FLAG_COMPRESSED) != 0;
     }

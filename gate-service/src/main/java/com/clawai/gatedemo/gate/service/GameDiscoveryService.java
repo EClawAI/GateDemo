@@ -35,8 +35,15 @@ public class GameDiscoveryService {
     private final GateConfig gateConfig;
     private final GameGrpcClientPool gameGrpcClientPool;
 
+    /** 内存中的 gameId → 实例信息，与连接池保持同步 */
     private final Map<Integer, GameInstance> gameMap = new ConcurrentHashMap<>();
 
+    /**
+     * @param redisTemplate       扫描注册表 key、读实例数据
+     * @param listenerContainer   订阅游戏事件频道
+     * @param gateConfig          是否启用发现、过期阈值等
+     * @param gameGrpcClientPool  增删 gRPC 连接
+     */
     public GameDiscoveryService(RedisTemplate<String, Object> redisTemplate,
                                RedisMessageListenerContainer listenerContainer,
                                GateConfig gateConfig,
@@ -47,6 +54,9 @@ public class GameDiscoveryService {
         this.gameGrpcClientPool = gameGrpcClientPool;
     }
 
+    /**
+     * 若启用发现则全量加载注册表并订阅事件；关闭时不访问 Redis。
+     */
     @PostConstruct
     public void init() {
         if (!gateConfig.getDiscovery().isEnabled()) {
@@ -144,6 +154,9 @@ public class GameDiscoveryService {
         }
     }
 
+    /**
+     * 周期性比对 Redis 注册表与本地 map：缺失或时间戳过旧则视为下线并断开 gRPC。
+     */
     @Scheduled(fixedRate = 10000)
     public void checkStaleGames() {
         if (!gateConfig.getDiscovery().isEnabled()) {
@@ -200,12 +213,14 @@ public class GameDiscoveryService {
         gameGrpcClientPool.removeConnection(gameId);
     }
 
+    /** @return 当前状态为可用的游戏实例列表（拷贝） */
     public List<GameInstance> getAvailableGames() {
         return gameMap.values().stream()
             .filter(GameInstance::isAvailable)
             .collect(Collectors.toList());
     }
 
+    /** @return 本地缓存的游戏映射快照，修改不影响内部 map */
     public Map<Integer, GameInstance> getGameMap() {
         return new HashMap<>(gameMap);
     }
@@ -258,6 +273,7 @@ public class GameDiscoveryService {
         public int getStatus() { return status; }
         public void setStatus(int status) { this.status = status; }
 
+        /** 与注册约定一致：status==2 表示可对外服务 */
         public boolean isAvailable() {
             return status == 2;
         }

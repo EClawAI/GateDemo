@@ -10,9 +10,17 @@ public class ExponentialBackoffPolicy implements ReconnectPolicy {
     private final double multiplier;
     private final int maxRetries;
 
+    /** 已成功安排的尝试次数，与 {@link #shouldRetry()} 上限比较 */
     private int retryCount = 0;
+    /** 当前等待间隔，每次 {@link #onRetry()} 后按乘子上限倍增 */
     private long currentDelay;
 
+    /**
+     * @param initialDelay 首次重连前等待（毫秒）
+     * @param maxDelay     单次等待上限（毫秒）
+     * @param multiplier   间隔倍增因子
+     * @param maxRetries   最大重试次数（不含首次连接）
+     */
     public ExponentialBackoffPolicy(long initialDelay, long maxDelay, double multiplier, int maxRetries) {
         this.initialDelay = initialDelay;
         this.maxDelay = maxDelay;

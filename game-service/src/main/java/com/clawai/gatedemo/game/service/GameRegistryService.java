@@ -20,15 +20,23 @@ public class GameRegistryService {
 
     private static final Logger logger = LoggerFactory.getLogger(GameRegistryService.class);
 
+    /** Redis 中每条游戏实例注册信息的键前缀，完整键为 {@code game:registry:{gameId}}。 */
     private static final String REGISTRY_KEY_PREFIX = "game:registry:";
+    /** 注册/注销/状态变更的 Pub/Sub 频道名。 */
     private static final String EVENT_CHANNEL = "game:events";
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final GameConfig gameConfig;
     private final GameStatusService gameStatusService;
 
+    /** 应用已就绪且配置开启注册后为 true，避免过早写 Redis。 */
     private boolean initialized = false;
 
+    /**
+     * @param redisTemplate     读写注册键与 Pub/Sub
+     * @param gameConfig        实例标识、注册开关与 TTL 等
+     * @param gameStatusService 读取当前状态写入注册值
+     */
     public GameRegistryService(RedisTemplate<String, Object> redisTemplate, 
                                GameConfig gameConfig, 
                                GameStatusService gameStatusService) {
@@ -37,6 +45,9 @@ public class GameRegistryService {
         this.gameStatusService = gameStatusService;
     }
 
+    /**
+     * 应用就绪后若开启注册则置位并执行首次 {@link #register()}。
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
         if (!gameConfig.getRegistry().isEnabled()) {
@@ -47,6 +58,11 @@ public class GameRegistryService {
         register();
     }
 
+    /**
+     * 写入本实例 {@code host:port:status:timestamp} 到 Redis 并设置 TTL，随后向 {@link #EVENT_CHANNEL} 发布 REGISTER 事件。
+     *
+     * @apiNote 未初始化或注册关闭时为 no-op；异常吞掉并打 warn
+     */
     public void register() {
         if (!initialized || !gameConfig.getRegistry().isEnabled()) {
             return;
@@ -79,6 +95,9 @@ public class GameRegistryService {
         }
     }
 
+    /**
+     * 进程退出前删除注册键并广播 UNREGISTER，便于 Login 等及时摘除路由。
+     */
     @PreDestroy
     public void unregister() {
         if (!initialized || !gameConfig.getRegistry().isEnabled()) {
@@ -103,6 +122,12 @@ public class GameRegistryService {
         register();
     }
 
+    /**
+     * 状态变更时向事件频道发送 UPDATE 通知（不含完整注册值，消费者可再查 Redis）。
+     *
+     * @param oldStatus 变更前枚举数值
+     * @param newStatus 变更后枚举数值
+     */
     public void publishStatusUpdate(int oldStatus, int newStatus) {
         if (!initialized || !gameConfig.getRegistry().isEnabled()) {
             return;
@@ -117,6 +142,9 @@ public class GameRegistryService {
         }
     }
 
+    /**
+     * 从配置 id 字符串中提取数字作为 gameId；无法解析时回退 1001。
+     */
     private int parseGameId(String id) {
         try {
             return Integer.parseInt(id.replaceAll("[^0-9]", ""));

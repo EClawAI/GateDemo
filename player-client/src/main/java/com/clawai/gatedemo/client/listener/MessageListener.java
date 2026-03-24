@@ -15,22 +15,41 @@ public class MessageListener {
 
     private static final Logger logger = LoggerFactory.getLogger(MessageListener.class);
 
+    /** 按消息 ID 注册的下行回调；并发注册与 {@link #onMessage(WrappedMessage)} 分发场景下使用线程安全 Map */
     private final Map<Short, Consumer<WrappedMessage>> listeners = new ConcurrentHashMap<>();
+    /** 未注册消息 ID 时的兜底处理，默认仅打调试日志 */
     private final Consumer<WrappedMessage> defaultListener;
 
     public MessageListener() {
         this.defaultListener = msg -> logger.debug("Received message: {}", msg);
     }
 
+    /**
+     * 为指定消息 ID 注册消费者；后注册覆盖先注册。
+     *
+     * @param messageId 协议短消息 ID
+     * @param listener  收到对应下行报文时在调用线程执行
+     */
     public void register(short messageId, Consumer<WrappedMessage> listener) {
         listeners.put(messageId, listener);
         logger.info("Registered listener for messageId: {}", messageId);
     }
 
+    /**
+     * 移除指定消息 ID 的监听；若无注册则为空操作。
+     *
+     * @param messageId 协议短消息 ID
+     */
     public void unregister(short messageId) {
         listeners.remove(messageId);
     }
 
+    /**
+     * 根据报文头中的消息 ID 分发到已注册回调；无匹配时使用默认监听器。
+     * 监听器异常会被捕获并记录，不影响其他消息。
+     *
+     * @param message 解码后的完整报文，含头与体
+     */
     public void onMessage(WrappedMessage message) {
         if (message == null || message.getHeader() == null) {
             return;
@@ -50,10 +69,16 @@ public class MessageListener {
         }
     }
 
+    /** 清空所有已注册监听，用于断线重连或测试隔离 */
     public void clear() {
         listeners.clear();
     }
 
+    /**
+     * 返回当前注册表的快照副本，避免外部直接修改内部 Map。
+     *
+     * @return 消息 ID 到监听器的拷贝
+     */
     public Map<Short, Consumer<WrappedMessage>> getListeners() {
         return new ConcurrentHashMap<>(listeners);
     }

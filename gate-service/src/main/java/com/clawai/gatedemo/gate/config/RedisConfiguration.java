@@ -16,8 +16,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import java.util.List;
 
 /**
- * Redis configuration supporting both standalone and Sentinel modes.
- * When {@code gate.redis.sentinel.master} is set, uses Sentinel; otherwise standalone.
+ * Redis 自动配置：支持单机与 Sentinel；当配置了 {@code gate.redis.sentinel.master} 时走哨兵，否则为单机直连。
  */
 @Configuration
 public class RedisConfiguration {
@@ -26,10 +25,18 @@ public class RedisConfiguration {
 
     private final GateConfig gateConfig;
 
+    /**
+     * @param gateConfig 读取 {@code gate.redis} 与哨兵节点列表
+     */
     public RedisConfiguration(GateConfig gateConfig) {
         this.gateConfig = gateConfig;
     }
 
+    /**
+     * 根据配置创建 Lettuce 连接工厂；哨兵模式下密码与 database 会应用到 Sentinel 配置。
+     *
+     * @return 可用于 {@link RedisTemplate}、监听容器等的连接工厂
+     */
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
         GateConfig.RedisConfig redis = gateConfig.getRedis();

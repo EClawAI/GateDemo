@@ -16,9 +16,13 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class TcpChannelInitializer extends ChannelInitializer<SocketChannel> {
 
+    /** 共享编解码实例以降低每条连接开销（编解码器须线程安全或可安全复用） */
     private final GameMessageDecoder decoder = new GameMessageDecoder();
     private final GameMessageEncoder encoder = new GameMessageEncoder();
 
+    /**
+     * 装配读空闲、心跳、游戏消息编解码；未挂载业务 handler，由外层 pipeline 继续追加。
+     */
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
         ch.pipeline()

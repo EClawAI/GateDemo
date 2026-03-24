@@ -16,10 +16,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Gate cluster registration manager. Registers this gate instance to Redis on startup,
- * with TTL 60s and refresh every 30s.
- * Key: gate:cluster:{gateId}
- * Value: JSON with host, port, tcpPort, timestamp
+ * Gate 集群注册：启动时将本节点信息写入 Redis，TTL 60s、每 30s 续期；其他组件可按 key 发现实例。
+ * Key: {@code gate:cluster:{gateId}}，Value: host、port、tcpPort、timestamp。
  */
 @Component
 @ConditionalOnProperty(name = "gate.cluster.enabled", havingValue = "true")
@@ -33,14 +31,22 @@ public class GateClusterManager {
     private final GateConfig gateConfig;
     private final RedisTemplate<String, Object> redisTemplate;
 
+    /** 定时刷新注册信息的单线程调度器（守护线程） */
     private ScheduledExecutorService scheduler;
 
+    /**
+     * @param gateConfig      本机 id、监听地址与 TCP 端口等
+     * @param redisTemplate   写入集群注册 KV
+     */
     public GateClusterManager(GateConfig gateConfig,
                               RedisTemplate<String, Object> redisTemplate) {
         this.gateConfig = gateConfig;
         this.redisTemplate = redisTemplate;
     }
 
+    /**
+     * 立即注册一次并启动定时节拍；失败仅打日志，不阻止 Bean 就绪。
+     */
     @PostConstruct
     public void start() {
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -55,6 +61,9 @@ public class GateClusterManager {
         logger.info("GateClusterManager started, registering gate {} to Redis every {}s", gateConfig.getId(), REFRESH_INTERVAL_SECONDS);
     }
 
+    /**
+     * 关闭调度器并从 Redis 删除本节点 key；中断时尽力 shutdownNow。
+     */
     @PreDestroy
     public void stop() {
         if (scheduler != null) {

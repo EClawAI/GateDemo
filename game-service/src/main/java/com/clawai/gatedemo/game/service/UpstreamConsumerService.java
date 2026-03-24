@@ -24,8 +24,15 @@ public class UpstreamConsumerService {
     }
 
     /**
-     * 处理来自 Gate 的直接消息
-     * 无 Redis 版本：直接调用 messageHandler 处理
+     * 将 Map 形态 body 序列化为 JSON 后走 {@link GameMessageHandler#handleMessage(Long, String, String)}（Unary，无 sink）。
+     *
+     * @param gateId    网关标识，仅日志
+     * @param playerId  玩家 ID
+     * @param gameId    当前未传入 Handler（内部按 0 处理），预留扩展
+     * @param msgType   消息类型
+     * @param seq       序列号，当前 Unary 路径未使用
+     * @param timestamp 上游时间戳，当前未使用
+     * @param body      业务负载 Map
      */
     public void processMessage(String gateId, Long playerId, Integer gameId, 
                                String msgType, Long seq, Long timestamp, Map<String, Object> body) {

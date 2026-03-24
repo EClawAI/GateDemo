@@ -24,7 +24,9 @@ public class GameServiceApplication implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(GameServiceApplication.class);
 
+    /** 阻塞主线程直至收到关闭信号，与 shutdown hook 配合实现“常驻进程”。 */
     private static final CountDownLatch latch = new CountDownLatch(1);
+    /** 预留的运行标志位，供关闭钩子等读取（当前与 latch 联动停止流程）。 */
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
     private final GameStatusService gameStatusService;
@@ -33,10 +35,21 @@ public class GameServiceApplication implements CommandLineRunner {
         this.gameStatusService = gameStatusService;
     }
 
+    /**
+     * 启动 Spring 容器并执行 {@link CommandLineRunner} 逻辑。
+     *
+     * @param args 命令行参数，透传给 Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(GameServiceApplication.class, args);
     }
 
+    /**
+     * 容器就绪后将会话门禁设为可登录，注册 JVM 关闭钩子在退出前释放 latch，主线程 await 保持进程不退出。
+     *
+     * @param args 未使用
+     * @throws Exception 未在此方法中主动抛出；latch 等待可被中断并恢复中断标志
+     */
     @Override
     public void run(String... args) throws Exception {
         gameStatusService.setStatus(GameStatus.STARTED_CAN_LOGIN);

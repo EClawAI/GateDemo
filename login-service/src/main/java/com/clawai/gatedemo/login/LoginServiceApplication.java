@@ -8,7 +8,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 @SpringBootApplication
 public class LoginServiceApplication {
-    
+
+    /**
+     * 启动 Spring 应用上下文并运行登录服务。
+     *
+     * @param args 命令行参数，透传给 Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(LoginServiceApplication.class, args);
     }

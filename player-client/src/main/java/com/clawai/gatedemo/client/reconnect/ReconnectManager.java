@@ -53,6 +53,9 @@ public class ReconnectManager {
         scheduleReconnect();
     }
 
+    /**
+     * 按策略延迟后触发下一次 {@link ReconnectPolicy#onRetry()}；用尽次数时通知 {@link ReconnectCallback#onReconnectMaxAttemptsReached()}。
+     */
     private void scheduleReconnect() {
         if (!policy.shouldRetry()) {
             logger.warn("Max reconnect attempts reached");
@@ -72,6 +75,9 @@ public class ReconnectManager {
         }, delay, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 连接建立成功：取消挂起重连任务、重置策略计数并回调成功。
+     */
     public void onConnectSuccess() {
         cancelReconnect();
         state = State.CONNECTED;
@@ -80,6 +86,11 @@ public class ReconnectManager {
         logger.info("Reconnect successful");
     }
 
+    /**
+     * 在仍处于 {@link State#RECONNECTING} 时记录失败并继续排期下一次尝试。
+     *
+     * @param cause 底层连接失败原因
+     */
     public void onConnectFailed(Throwable cause) {
         if (state == State.RECONNECTING) {
             int attempt = policy.getRetryCount();
@@ -88,27 +99,38 @@ public class ReconnectManager {
         }
     }
 
+    /**
+     * 在曾处于已连接态时标记为断开，供上层决定是否调用 {@link #startReconnect()}。
+     */
     public void onDisconnect() {
         if (state == State.CONNECTED) {
             state = State.DISCONNECTED;
         }
     }
 
+    /** 取消已调度但未执行的重连任务，不关闭调度器 */
     public void cancelReconnect() {
         if (reconnectTask != null && !reconnectTask.isDone()) {
             reconnectTask.cancel(false);
         }
     }
 
+    /** 取消挂起任务并关闭调度线程池 */
     public void shutdown() {
         cancelReconnect();
         scheduler.shutdown();
     }
 
+    /** @return 当前连接/重连状态 */
     public State getState() {
         return state;
     }
 
+    /**
+     * 供外部同步状态机（例如开始主动连接时置为 {@link State#CONNECTING}）。
+     *
+     * @param state 新状态
+     */
     public void setState(State state) {
         this.state = state;
     }

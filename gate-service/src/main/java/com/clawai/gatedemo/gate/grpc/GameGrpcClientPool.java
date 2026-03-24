@@ -65,21 +65,19 @@ public class GameGrpcClientPool {
 
     private final GateConfig gateConfig;
     private final ObjectMapper objectMapper;
-    
+
     /**
-     * Stream消息处理器回调
+     * 下行消息回调：Game 经双向流推送至网关时触发；可能由 Netty/gRPC 线程调用，实现方需注意线程安全。
      */
     private StreamMessageHandler streamMessageHandler;
-    
+
     /**
-     * 连接池
-     * Key: gameId
-     * Value: GrpcConnection（包含 Channel 和 Stub）
+     * gameId → 单条物理连接（含 channel、stub、流状态）；{@link ConcurrentHashMap} 支持并发增删。
      */
     private final Map<Integer, GrpcConnection> connectionPool = new ConcurrentHashMap<>();
 
     /**
-     * 重连调度器（替代 Thread.sleep）
+     * 异步执行指数退避重连，避免在回调线程中阻塞 sleep；关闭池时会 shutdown。
      */
     private volatile ScheduledExecutorService reconnectScheduler;
     
@@ -93,15 +91,16 @@ public class GameGrpcClientPool {
         final ManagedChannel channel;
         final GameServiceGrpc.GameServiceBlockingStub blockingStub;
         final GameServiceGrpc.GameServiceStub asyncStub;
-        
-        // Stream通信
+
+        /** 业务双向流上行端：向 Game 侧 {@code onNext} 发消息；错误时会触发重连调度。 */
         StreamObserver<GameMessage> gameStreamSender;
+        /** 心跳流上行端：{@link GameGrpcClientPool#sendHeartbeat(int)} 经此发送。 */
         StreamObserver<HeartbeatRequest> heartbeatObserver;
-        
-        // 连接状态
+
+        /** 当前业务流是否已建立且视为可用；断流或 onError 时置 false。 */
         volatile boolean streamConnected = false;
 
-        // 指数退避（每个连接独立）
+        /** 本 game 实例重连间隔策略，重连成功后重置。 */
         volatile ExponentialBackoff backoff;
 
         GrpcConnection(int gameId, String host, int port, ManagedChannel channel, ExponentialBackoff backoff) {
@@ -116,14 +115,20 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * Stream消息处理器接口
+     * Game 经 gRPC 双向流推送到网关时的回调接口。
      */
     public interface StreamMessageHandler {
+        /**
+         * 收到一条 Game 下发的消息。
+         *
+         * @param message 含 gameId、playerId、msgType、body 等；勿长期阻塞该线程
+         */
         void onMessageReceived(GameMessage message);
     }
-    
+
     /**
-     * 构造函数
+     * @param gateConfig    本机网关 ID、Game 列表、gRPC/TLS 等配置
+     * @param objectMapper  将消息体对象序列化为 JSON 写入 protobuf
      */
     public GameGrpcClientPool(GateConfig gateConfig, ObjectMapper objectMapper) {
         this.gateConfig = gateConfig;
@@ -131,15 +136,17 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 设置Stream消息处理器
+     * 注册下行消息处理器；通常在启动阶段注入，与业务 WebSocket 转发衔接。
+     *
+     * @param handler 可为 null 表示暂不处理下行推送
      */
     public void setStreamMessageHandler(StreamMessageHandler handler) {
         this.streamMessageHandler = handler;
     }
     
     /**
-     * 初始化连接池
-     * 从配置中读取所有 Game 服务信息并建立连接
+     * 创建重连线程池并按配置为每个 Game 建连、拉流与心跳。
+     * 副作用：向连接池写入条目并启动 stream/heartbeat；应由容器仅调用一次。
      */
     @PostConstruct
     public void init() {
@@ -160,11 +167,11 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 添加 Game 服务连接
-     * 
-     * @param gameId 游戏 ID
-     * @param host 主机地址
-     * @param port gRPC 端口
+     * 为指定 gameId 新建 {@link ManagedChannel} 并加入池，同时启动业务双向流与心跳流。
+     *
+     * @param gameId 逻辑游戏实例 ID，与路由一致
+     * @param host   gRPC 地址
+     * @param port   gRPC 端口
      */
     public void addConnection(int gameId, String host, int port) {
         if (connectionPool.containsKey(gameId)) {
@@ -211,9 +218,9 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 移除 Game 服务连接
-     * 
-     * @param gameId 游戏 ID
+     * 从池中移除并关闭 channel，完成 stream/heartbeat；无对应连接时无操作。
+     *
+     * @param gameId 目标游戏实例 ID
      */
     public void removeConnection(int gameId) {
         GrpcConnection conn = connectionPool.remove(gameId);
@@ -322,14 +329,14 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 通过Stream发送游戏消息（任务2.2）
-     * 
-     * @param gameId 游戏 ID
-     * @param playerId 玩家 ID
-     * @param msgType 消息类型
-     * @param seq 消息序列号
-     * @param body 消息体（Java 对象）
-     * @return 是否发送成功
+     * 优先经业务双向流异步下发；流不可用时回退为 {@link #sendGameMessage(int, Long, String, int, Object)}（阻塞 unary）。
+     *
+     * @param gameId   路由目标
+     * @param playerId 玩家 ID，可为 null 视协议而定
+     * @param msgType  业务消息类型字符串
+     * @param seq      客户端序列号
+     * @param body     将 JSON 序列化后写入 protobuf 消息体
+     * @return 入队/发送成功为 true；连接缺失、序列化失败等为 false（仅打日志，不抛业务异常）
      */
     public boolean sendGameMessageViaStream(int gameId, Long playerId, String msgType, int seq, Object body) {
         GrpcConnection conn = getConnection(gameId);
@@ -373,7 +380,14 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 发送游戏消息（阻塞式，备用方案）
+     * 使用阻塞 stub 同步调用 {@code sendGameMessage}，作为流不可用时的兜底。
+     *
+     * @param gameId   路由目标
+     * @param playerId 玩家 ID
+     * @param msgType  业务类型
+     * @param seq      序号
+     * @param body     将序列化为 JSON 写入消息
+     * @return Game 返回 code==0 为 true；RPC 异常或非 0 为 false
      */
     public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, Object body) {
         GrpcConnection conn = getConnection(gameId);
@@ -446,7 +460,9 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 发送心跳
+     * 向指定 game 的心跳流发送一帧；连接或流未就绪时静默跳过（仅 warn）。
+     *
+     * @param gameId 目标实例
      */
     public void sendHeartbeat(int gameId) {
         GrpcConnection conn = getConnection(gameId);
@@ -464,28 +480,29 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 检查指定 gameId 是否已有连接
+     * @param gameId 游戏实例 ID
+     * @return 池中是否存在该键（不代表流一定健康）
      */
     public boolean hasConnection(int gameId) {
         return connectionPool.containsKey(gameId);
     }
 
     /**
-     * 获取池中所有 gameId
+     * @return 当前池内 gameId 快照（拷贝自 keySet，并发下可能瞬时不一致）
      */
     public Set<Integer> getGameIds() {
         return new java.util.HashSet<>(connectionPool.keySet());
     }
 
     /**
-     * 获取连接池大小
+     * @return 连接池中当前 gameId 条目数量
      */
     public int getPoolSize() {
         return connectionPool.size();
     }
     
     /**
-     * 关闭所有连接
+     * 关闭重连调度器并逐个 {@link #removeConnection(int)}；供容器销毁时调用。
      */
     @PreDestroy
     public void shutdown() {

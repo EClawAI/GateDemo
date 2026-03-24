@@ -22,6 +22,11 @@ public class LoginController {
     private final GateService gateService;
     private final JwtTokenService jwtTokenService;
 
+    /**
+     * @param gameRouteService 游戏与网关路由决策
+     * @param gateService      网关心跳与列表
+     * @param jwtTokenService  JWT 签发
+     */
     public LoginController(GameRouteService gameRouteService, GateService gateService,
                            JwtTokenService jwtTokenService) {
         this.gameRouteService = gameRouteService;
@@ -29,6 +34,12 @@ public class LoginController {
         this.jwtTokenService = jwtTokenService;
     }
 
+    /**
+     * 玩家登录：解析路由结果，返回目标网关、游戏与 JWT；路由失败时返回业务错误码。
+     *
+     * @param request 含玩家 ID 等登录入参
+     * @return 成功时携带 {@link LoginResponse}，失败时为 {@link ApiResponse} 错误体
+     */
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@RequestBody LoginRequest request) {
         logger.info("Login request: playerId={}", request.getPlayerId());
@@ -53,6 +64,12 @@ public class LoginController {
         return ApiResponse.success(response);
     }
 
+    /**
+     * 记录玩家最近一次进入的游戏，供后续登录优先路由。
+     *
+     * @param request 玩家 ID 与游戏 ID
+     * @return 统一成功空体
+     */
     @PostMapping("/game/login-record")
     public ApiResponse<Void> recordLogin(@RequestBody LoginRecordRequest request) {
         logger.info("Login record: playerId={}, gameId={}", request.getPlayerId(), request.getGameId());
@@ -62,6 +79,12 @@ public class LoginController {
         return ApiResponse.success(null);
     }
 
+    /**
+     * 网关周期性上报存活与在线人数，刷新内存与 Redis 中的网关视图。
+     *
+     * @param request 网关标识、地址、端口与在线数
+     * @return 统一成功空体
+     */
     @PostMapping("/gate/heartbeat")
     public ApiResponse<Void> gateHeartbeat(@RequestBody GateHeartbeatRequest request) {
         logger.debug("Gate heartbeat: gateId={}, online={}", request.getGateId(), request.getOnline());
@@ -71,6 +94,11 @@ public class LoginController {
         return ApiResponse.success(null);
     }
 
+    /**
+     * 查询当前已上报的网关快照（内存视图）。
+     *
+     * @return 网关 ID 到实例信息的映射
+     */
     @GetMapping("/gate/list")
     public ApiResponse<Object> gateList() {
         return ApiResponse.success(gateService.getAllGates());

@@ -28,13 +28,21 @@ public class MessageQueueConsumer {
     private final RedisTemplate<String, Object> redisTemplate;
     private final MessageQueueProducer producer;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    /** 消费循环开关，{@link #stopConsuming()} 后置 false */
     private volatile boolean running = false;
 
+    /**
+     * @param redisTemplate Streams 读与 ACK
+     * @param producer      预留与生产者协作（当前消费逻辑未直接使用）
+     */
     public MessageQueueConsumer(RedisTemplate<String, Object> redisTemplate, MessageQueueProducer producer) {
         this.redisTemplate = redisTemplate;
         this.producer = producer;
     }
 
+    /**
+     * 尝试创建消费者组并启动定时拉取；Redis 不可用时直接返回并关闭离线队列能力。
+     */
     @PostConstruct
     public void init() {
         try {
@@ -49,6 +57,9 @@ public class MessageQueueConsumer {
         startConsuming(consumerName);
     }
 
+    /**
+     * @param consumerName 本实例消费者名，用于组内区分；若已在运行则忽略
+     */
     public void startConsuming(String consumerName) {
         if (running) {
             return;
@@ -100,10 +111,12 @@ public class MessageQueueConsumer {
         }
     }
 
+    /** 停止调度任务中的消费逻辑，不关闭线程池。 */
     public void stopConsuming() {
         running = false;
     }
 
+    /** 停止消费并 shutdown 调度线程池。 */
     public void shutdown() {
         stopConsuming();
         scheduler.shutdown();

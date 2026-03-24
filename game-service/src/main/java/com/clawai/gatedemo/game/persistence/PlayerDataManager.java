@@ -23,6 +23,12 @@ public class PlayerDataManager extends AbstractDataManager<Long, PlayerData> {
         super(mongoTemplate);
     }
 
+    /**
+     * 为新玩家生成默认档案（昵称、初始资源、示例背包），仅内存形态；由基类 {@code load} 负责首次落库。
+     *
+     * @param playerId 玩家主键
+     * @return 带齐默认字段的 {@link PlayerData}
+     */
     @Override
     protected PlayerData createDefault(Long playerId) {
         long now = System.currentTimeMillis();
@@ -48,16 +54,27 @@ public class PlayerDataManager extends AbstractDataManager<Long, PlayerData> {
         return player;
     }
 
+    /**
+     * @return MongoDB 集合名 {@code player_data}
+     */
     @Override
     protected String getCollectionName() {
         return "player_data";
     }
 
+    /**
+     * @return 实体类型 {@link PlayerData}
+     */
     @Override
     protected Class<PlayerData> getEntityClass() {
         return PlayerData.class;
     }
 
+    /**
+     * 定时将 dirty 玩家数据批量刷入 Mongo；间隔由 {@code game.persistence.flush-interval} 配置（默认 30s）。
+     *
+     * @apiNote 与业务触发的 {@code saveNow} 并存，降低丢数据窗口
+     */
     @Scheduled(fixedRateString = "${game.persistence.flush-interval:30000}")
     public void scheduledFlush() {
         flushAll();

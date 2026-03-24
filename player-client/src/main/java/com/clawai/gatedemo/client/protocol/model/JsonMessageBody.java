@@ -10,13 +10,18 @@ import java.util.Map;
  */
 public class JsonMessageBody implements MessageBody {
 
+    /** 全类共享，避免多处 ObjectMapper 配置不一致 */
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** 结构化业务字段，序列化后即为协议体 */
     private Map<String, Object> data;
 
     public JsonMessageBody() {
     }
 
+    /**
+     * @param data 初始键值载荷，可为 null
+     */
     public JsonMessageBody(Map<String, Object> data) {
         this.data = data;
     }

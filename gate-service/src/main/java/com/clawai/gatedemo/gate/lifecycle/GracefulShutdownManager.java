@@ -37,11 +37,18 @@ public class GracefulShutdownManager {
     @Value("${gate.shutdown.enabled:true}")
     private boolean enabled;
 
+    /**
+     * @param nettyWebSocketServer 用于停止 accept 与后续 Netty 关闭
+     * @param playerService        广播关服通知并轮询在线数
+     */
     public GracefulShutdownManager(NettyWebSocketServer nettyWebSocketServer, PlayerService playerService) {
         this.nettyWebSocketServer = nettyWebSocketServer;
         this.playerService = playerService;
     }
 
+    /**
+     * 容器销毁前执行：停接入、通知玩家、等待 drain；禁用或中断时提前返回。
+     */
     @PreDestroy
     public void onShutdown() {
         if (!enabled) {

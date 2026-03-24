@@ -8,8 +8,7 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
 /**
- * Gate service custom metrics for Prometheus.
- * Registers gauges for active_connections and grpc_pool_size.
+ * 网关自定义 Prometheus 指标：注册在线连接数、gRPC 池大小等 Gauge。
  */
 @Component
 public class GateMetrics {
@@ -18,6 +17,11 @@ public class GateMetrics {
     private final PlayerService playerService;
     private final GameGrpcClientPool gameGrpcClientPool;
 
+    /**
+     * @param meterRegistry       注册指标的目标注册表
+     * @param playerService       提供在线人数
+     * @param gameGrpcClientPool  提供池大小
+     */
     public GateMetrics(MeterRegistry meterRegistry,
                        PlayerService playerService,
                        GameGrpcClientPool gameGrpcClientPool) {
@@ -26,6 +30,7 @@ public class GateMetrics {
         this.gameGrpcClientPool = gameGrpcClientPool;
     }
 
+    /** 向 {@link MeterRegistry} 绑定 Gauge，重复调用会重复注册，故仅在启动时执行一次。 */
     @PostConstruct
     public void register() {
         Gauge.builder("active_connections", playerService, PlayerService::getOnlineCount)

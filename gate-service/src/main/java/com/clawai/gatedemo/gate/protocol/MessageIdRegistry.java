@@ -71,14 +71,7 @@ public class MessageIdRegistry {
     }
 
     /**
-     * 注册消息ID
-     *
-     * 双向注册：
-     * - NAME_TO_ID: 名称 → ID
-     * - ID_TO_NAME: ID → 名称
-     *
-     * @param name 消息名称
-     * @param id 消息ID
+     * 同时写入名称→ID 与 ID→名称；后注册同名或同 ID 会覆盖先前映射。
      */
     private static void register(String name, short id) {
         NAME_TO_ID.put(name, id);
@@ -86,14 +79,10 @@ public class MessageIdRegistry {
     }
 
     /**
-     * 根据名称获取ID
-     *
-     * 查找顺序：
-     * 1. 先在注册表中查找
-     * 2. 未找到则使用MessageIdGenerator自动生成
+     * 优先返回静态注册 ID；未注册则委托 {@link MessageIdGenerator#generateId(String)}。
      *
      * @param name 消息名称
-     * @return 消息ID
+     * @return 消息 ID（短整型位型）
      */
     public static short getIdByName(String name) {
         Short id = NAME_TO_ID.get(name);
@@ -102,12 +91,10 @@ public class MessageIdRegistry {
     }
 
     /**
-     * 根据ID获取名称
+     * 仅解析在静态块中注册过的 ID；纯自动生成且未再注册的名称无法反查。
      *
-     * 用于日志、监控等场景
-     *
-     * @param id 消息ID
-     * @return 消息名称，未注册返回null
+     * @param id 消息 ID
+     * @return 已注册名称；否则 null
      */
     public static String getNameById(short id) {
         return ID_TO_NAME.get(id);

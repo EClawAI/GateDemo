@@ -62,16 +62,11 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
     private static final int MAX_BODY_LENGTH = 10 * 1024 * 1024;
 
     /**
-     * 核心解码方法
+     * 按 14 字节头 + 定长体拆包；半包则复位读指针待下次；非法 {@code bodyLength} 会关闭连接。
      *
-     * Netty调用时机：
-     * - 当Channel中有数据可读时
-     * - Netty会自动调用此方法进行解码
-     * - 解码后的对象会自动传递给Pipeline中的下一个Handler
-     *
-     * @param ctx Netty通道上下文
-     * @param in 输入缓冲区，包含从Channel读取的数据
-     * @param out 输出列表，解码后的对象放入此列表
+     * @param ctx Netty 上下文
+     * @param in  可读字节缓冲
+     * @param out 成功时追加 {@link WrappedMessage}；解压失败时可能不产出消息（见实现）
      */
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
@@ -150,24 +145,10 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
     }
 
     /**
-     * 使用INFLATE算法解压数据
+     * DEFLATE 压缩流的解压；输出缓冲区按输入约 4 倍预分配，异常或空结果返回 null。
      *
-     * INFLATE是DEFLATE的逆过程：
-     * - DEFLATE: 压缩数据
-     * - INFLATE: 解压数据
-     *
-     * 实现细节：
-     * 1. 创建Inflater实例
-     * 2. 输入压缩数据
-     * 3. inflate()执行解压
-     * 4. 释放资源end()
-     *
-     * 缓冲区大小：
-     * - 预分配原始大小4倍的缓冲区
-     * - 实际解压数据通常不会超过原始大小
-     *
-     * @param data 压缩后的数据
-     * @return 解压后的数据，失败返回null
+     * @param data 编码端 {@link GameMessageEncoder} 写入的压缩体
+     * @return 解压后字节；失败返回 null（调用方丢弃该条消息）
      */
     private byte[] decompress(byte[] data) {
         // 创建INFLATE解压器
