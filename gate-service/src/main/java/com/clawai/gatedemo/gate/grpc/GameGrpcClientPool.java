@@ -3,7 +3,7 @@ package com.clawai.gatedemo.gate.grpc;
 import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.resilience.ExponentialBackoff;
 import com.clawai.gatedemo.grpc.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -58,7 +58,6 @@ public class GameGrpcClientPool {
     private static final Logger logger = LoggerFactory.getLogger(GameGrpcClientPool.class);
 
     private final GateConfig gateConfig;
-    private final ObjectMapper objectMapper;
 
     /**
      * 下行消息回调：Game 经双向流推送至网关时触发；可能由 Netty/gRPC 线程调用，实现方需注意线程安全。
@@ -121,12 +120,10 @@ public class GameGrpcClientPool {
     }
 
     /**
-     * @param gateConfig    本机网关 ID、Game 列表、gRPC/TLS 等配置
-     * @param objectMapper  将消息体对象序列化为 JSON 写入 protobuf
+     * @param gateConfig 本机网关 ID、gRPC/TLS 等配置
      */
-    public GameGrpcClientPool(GateConfig gateConfig, ObjectMapper objectMapper) {
+    public GameGrpcClientPool(GateConfig gateConfig) {
         this.gateConfig = gateConfig;
-        this.objectMapper = objectMapper;
     }
     
     /**
@@ -317,34 +314,29 @@ public class GameGrpcClientPool {
     }
     
     /**
-     * 优先经业务双向流异步下发；流不可用时回退为 {@link #sendGameMessage(int, Long, String, int, Object)}（阻塞 unary）。
+     * 优先经业务双向流异步下发；流不可用时回退为阻塞 unary。
      *
      * @param gameId   路由目标
-     * @param playerId 玩家 ID，可为 null 视协议而定
+     * @param playerId 玩家 ID
      * @param msgType  业务消息类型字符串
      * @param seq      客户端序列号
-     * @param body     将 JSON 序列化后写入 protobuf 消息体
-     * @return 入队/发送成功为 true；连接缺失、序列化失败等为 false（仅打日志，不抛业务异常）
+     * @param body     原始 protobuf 二进制体，直接写入 GameMessage.body
+     * @return 发送成功为 true；连接缺失等为 false
      */
-    public boolean sendGameMessageViaStream(int gameId, Long playerId, String msgType, int seq, Object body) {
+    public boolean sendGameMessageViaStream(int gameId, Long playerId, String msgType, int seq, byte[] body) {
         GrpcConnection conn = getConnection(gameId);
         
         if (conn == null) {
-            logger.error("❌ Game {} 连接不存在，无法发送消息", gameId);
+            logger.error("Game {} 连接不存在，无法发送消息", gameId);
             return false;
         }
         
-        // 检查Stream是否已连接
         if (!conn.streamConnected || conn.gameStreamSender == null) {
-            logger.warn("⚠️ Game {} Stream未连接，尝试使用阻塞式调用", gameId);
+            logger.warn("Game {} Stream未连接，尝试使用阻塞式调用", gameId);
             return sendGameMessage(gameId, playerId, msgType, seq, body);
         }
         
         try {
-            // 1. 将消息体转换为 JSON 字符串，再转为二进制
-            String bodyJson = objectMapper.writeValueAsString(body);
-            
-            // 2. 构建 gRPC 消息（二进制格式）
             GameMessage message = GameMessage.newBuilder()
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
@@ -352,17 +344,16 @@ public class GameGrpcClientPool {
                 .setMsgType(msgType != null ? msgType : "unknown")
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
-                .setBody(com.google.protobuf.ByteString.copyFromUtf8(bodyJson))
+                .setBody(ByteString.copyFrom(body != null ? body : new byte[0]))
                 .build();
             
-            // 3. 通过Stream发送（异步）
             conn.gameStreamSender.onNext(message);
             
-            logger.debug("📤 Stream消息发送成功：gameId={}, playerId={}", gameId, playerId);
+            logger.debug("Stream消息发送成功：gameId={}, playerId={}", gameId, playerId);
             return true;
             
         } catch (Exception e) {
-            logger.error("❌ Stream消息发送失败：gameId={}, {}", gameId, e.getMessage());
+            logger.error("Stream消息发送失败：gameId={}, {}", gameId, e.getMessage());
             return false;
         }
     }
@@ -374,22 +365,18 @@ public class GameGrpcClientPool {
      * @param playerId 玩家 ID
      * @param msgType  业务类型
      * @param seq      序号
-     * @param body     将序列化为 JSON 写入消息
+     * @param body     原始 protobuf 二进制体
      * @return Game 返回 code==0 为 true；RPC 异常或非 0 为 false
      */
-    public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, Object body) {
+    public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, byte[] body) {
         GrpcConnection conn = getConnection(gameId);
         
         if (conn == null) {
-            logger.error("❌ Game {} 连接不存在，无法发送消息", gameId);
+            logger.error("Game {} 连接不存在，无法发送消息", gameId);
             return false;
         }
         
         try {
-            // 1. 将消息体转换为 JSON 字符串，再转为二进制
-            String bodyJson = objectMapper.writeValueAsString(body);
-            
-            // 2. 构建 gRPC 消息（二进制格式）
             GameMessage message = GameMessage.newBuilder()
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
@@ -397,25 +384,24 @@ public class GameGrpcClientPool {
                 .setMsgType(msgType != null ? msgType : "unknown")
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
-                .setBody(com.google.protobuf.ByteString.copyFromUtf8(bodyJson))
+                .setBody(ByteString.copyFrom(body != null ? body : new byte[0]))
                 .build();
             
-            // 3. 发送消息（同步调用）
             GameResponse response = conn.blockingStub.sendGameMessage(message);
             
             if (response.getCode() == 0) {
-                logger.debug("📤 gRPC 消息发送成功：gameId={}, playerId={}", gameId, playerId);
+                logger.debug("gRPC 消息发送成功：gameId={}, playerId={}", gameId, playerId);
                 return true;
             } else {
-                logger.warn("⚠️ gRPC 消息发送失败：code={}, message={}", response.getCode(), response.getMessage());
+                logger.warn("gRPC 消息发送失败：code={}, message={}", response.getCode(), response.getMessage());
                 return false;
             }
             
         } catch (StatusRuntimeException e) {
-            logger.error("❌ gRPC 调用异常：gameId={}, {} - {}", gameId, e.getStatus(), e.getMessage());
+            logger.error("gRPC 调用异常：gameId={}, {} - {}", gameId, e.getStatus(), e.getMessage());
             return false;
         } catch (Exception e) {
-            logger.error("❌ 发送游戏消息失败：gameId={}, {}", gameId, e.getMessage());
+            logger.error("发送游戏消息失败：gameId={}, {}", gameId, e.getMessage());
             return false;
         }
     }

@@ -3,6 +3,8 @@ package com.clawai.gatedemo.gate.ws;
 import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.config.TlsSslContextFactory;
 import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
+import com.clawai.gatedemo.gate.ws.codec.WebSocketBinaryDecoder;
+import com.clawai.gatedemo.gate.ws.codec.WebSocketBinaryEncoder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -101,6 +103,8 @@ public class NettyWebSocketServer {
                         pipeline.addLast("chunkedWriter", new ChunkedWriteHandler());
                         pipeline.addLast("httpAggregator", new HttpObjectAggregator(8192));
                         pipeline.addLast("wsProtocol", new WebSocketServerProtocolHandler("/ws"));
+                        pipeline.addLast("wsBinaryDecoder", new WebSocketBinaryDecoder());
+                        pipeline.addLast("wsBinaryEncoder", new WebSocketBinaryEncoder());
                         pipeline.addLast("idleState", new IdleStateHandler(300, 0, 0, TimeUnit.SECONDS));
                         pipeline.addLast("businessHandler", gateWebSocketHandler);
                     }

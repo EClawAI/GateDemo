@@ -1,51 +1,54 @@
 package com.clawai.gatedemo.client.service;
 
 import com.clawai.gatedemo.client.config.PlayerConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.clawai.gatedemo.proto.gate.AuthRequest;
+import com.clawai.gatedemo.proto.gate.AuthResponse;
+import com.clawai.gatedemo.proto.gate.ClientHeartbeat;
+import com.clawai.gatedemo.proto.gate.HeartbeatAck;
+import com.clawai.gatedemo.proto.game.CgBattleMove;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.Mono;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
+import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
+import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient;
+import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.time.Duration;
-import java.util.Map;
+import java.nio.ByteBuffer;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * 演示用玩家客户端核心逻辑：基于 WebFlux {@link ReactorNettyWebSocketClient} 连接 gate WebSocket，
- * 完成鉴权、周期性心跳、下行解析与控制台交互发令，用于端到端验证文本协议路径。
+ * 演示用玩家客户端核心逻辑（二进制协议版）：基于 WebFlux ReactorNettyWebSocketClient
+ * 发送 BinaryWebSocketFrame（14 字节头 + protobuf body）。
  */
 @Service
 public class PlayerClientService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientService.class);
 
+    private static final short MSG_ID_AUTH = 0x1001;
+    private static final short MSG_ID_HEARTBEAT = 0x2001;
+    private static final short MSG_ID_HEARTBEAT_ACK = 0x2002;
+    private static final short MSG_ID_BATTLE_MOVE = 0x3001;
+
+    private static final int HEADER_SIZE = 14;
+
     private final PlayerConfig playerConfig;
-    private final ObjectMapper objectMapper;
-    /** Spring WebFlux 自带的响应式 WebSocket 客户端，与 Netty 底层兼容 */
     private final ReactorNettyWebSocketClient webSocketClient = new ReactorNettyWebSocketClient();
-    /** 阻塞主线程直至会话回调就绪，避免控制台在连接建立前启动 */
     private CountDownLatch latch;
-    /** 当前 WebSocket 会话，心跳线程与控制台通过其发送；非 volatile，依赖同线程写入后可见的用法 */
     private WebSocketSession currentSession;
 
-    /**
-     * @param playerConfig  {@code player.*} 绑定配置
-     * @param objectMapper  与网关 JSON 字段命名一致的序列化器
-     */
-    public PlayerClientService(PlayerConfig playerConfig, ObjectMapper objectMapper) {
+    public PlayerClientService(PlayerConfig playerConfig) {
         this.playerConfig = playerConfig;
-        this.objectMapper = objectMapper;
     }
 
-    /**
-     * 非阻塞发起 WebSocket 执行流，等待短时闩锁后启动控制台循环。
-     * 下行在 reactive 链中解析日志，心跳在独立线程中周期性发送。
-     */
     public void connect() {
         String url = String.format("ws://%s:%d/ws", playerConfig.getHost(), playerConfig.getPort());
         logger.info("Connecting to Gate at {}", url);
@@ -61,13 +64,9 @@ public class PlayerClientService {
                 startHeartbeat(session);
 
                 return session.receive()
-                        .doOnNext(message -> {
-                            String payload = message.getPayloadAsText();
-                            logger.info("Received: {}", payload);
-                            handleMessage(payload);
-                        })
+                        .doOnNext(message -> handleMessage(message))
                         .then();
-            }).subscribe(); // 移除 block() 调用，使用非阻塞方式
+            }).subscribe();
 
             if (latch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
                 logger.info("Connected successfully!");
@@ -77,20 +76,18 @@ public class PlayerClientService {
             }
         } catch (Exception e) {
             logger.error("Connection failed: {}", e.getMessage());
-            logger.info("Hint: Start Gate service first: cd gate-service && mvn spring-boot:run");
         }
     }
 
     private void authenticate(WebSocketSession session) {
         try {
-            Map<String, Object> authMessage = Map.of(
-                "type", "auth",
-                "player_id", playerConfig.getPlayerId()
-            );
-            // 异步发送，不使用 block()
-            session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(authMessage))))
-                .subscribe(null, error -> logger.error("Failed to send auth: {}", error.getMessage()));
-            logger.info("Auth message sent");
+            AuthRequest authReq = AuthRequest.newBuilder()
+                    .setToken("demo-token")
+                    .setGameId(1001)
+                    .build();
+
+            sendBinaryMessage(session, MSG_ID_AUTH, (short) 0x0000, authReq.toByteArray());
+            logger.info("Auth message sent (binary)");
         } catch (Exception e) {
             logger.error("Failed to send auth: {}", e.getMessage());
         }
@@ -100,15 +97,12 @@ public class PlayerClientService {
         new Thread(() -> {
             while (currentSession != null && currentSession.isOpen()) {
                 try {
-                    Thread.sleep(playerConfig.getHeartbeatInterval() * 1000);
+                    Thread.sleep(playerConfig.getHeartbeatInterval() * 1000L);
                     if (currentSession != null && currentSession.isOpen()) {
-                        Map<String, Object> heartbeat = Map.of(
-                            "type", "heartbeat",
-                            "player_id", playerConfig.getPlayerId()
-                        );
-                        session.send(Mono.just(session.textMessage(objectMapper.writeValueAsString(heartbeat))))
-                            .subscribe(null, error -> logger.debug("Heartbeat send error: {}", error.getMessage()));
-                        logger.debug("Heartbeat sent");
+                        ClientHeartbeat hb = ClientHeartbeat.newBuilder()
+                                .setTimestamp(System.currentTimeMillis()).build();
+                        sendBinaryMessage(session, MSG_ID_HEARTBEAT, (short) 0, hb.toByteArray());
+                        logger.debug("Heartbeat sent (binary)");
                     }
                 } catch (InterruptedException e) {
                     break;
@@ -119,50 +113,69 @@ public class PlayerClientService {
         }).start();
     }
 
-    /**
-     * 解析文本帧 JSON，按 {@code type} 打日志；鉴权确认与游戏下行在此分支处理。
-     *
-     * @param payload 原始文本消息体
-     */
-    private void handleMessage(String payload) {
+    private void handleMessage(WebSocketMessage wsMessage) {
         try {
-            Map<String, Object> message = objectMapper.readValue(payload, Map.class);
-            String type = (String) message.get("type");
-            
-            if ("auth_ack".equals(type)) {
-                logger.info("Authentication successful!");
-            } else if ("heartbeat_ack".equals(type)) {
-                logger.debug("Heartbeat acknowledged");
-            } else if ("battle.update".equals(type) || "game_msg".equals(type)) {
-                logger.info("Game message received: {}", message.get("body"));
+            DataBuffer payload = wsMessage.getPayload();
+            ByteBuffer bb = payload.toByteBuffer();
+
+            if (bb.remaining() < HEADER_SIZE) {
+                logger.warn("帧过短: {} bytes", bb.remaining());
+                return;
+            }
+
+            short flags = bb.getShort();
+            short sequence = bb.getShort();
+            short messageId = bb.getShort();
+            int bodyLength = bb.getInt();
+            int requestId = bb.getInt();
+
+            byte[] bodyBytes = new byte[0];
+            if (bodyLength > 0 && bb.remaining() >= bodyLength) {
+                bodyBytes = new byte[bodyLength];
+                bb.get(bodyBytes);
+            }
+
+            if (messageId == MSG_ID_AUTH) {
+                AuthResponse resp = AuthResponse.parseFrom(bodyBytes);
+                if (resp.getSuccess()) {
+                    logger.info("Authentication successful! playerId={}", resp.getPlayerId());
+                } else {
+                    logger.warn("Authentication failed: {}", resp.getMessage());
+                }
+            } else if (messageId == MSG_ID_HEARTBEAT_ACK) {
+                HeartbeatAck ack = HeartbeatAck.parseFrom(bodyBytes);
+                logger.debug("Heartbeat acknowledged: serverTime={}", ack.getServerTime());
+            } else {
+                logger.info("Received message: msgId=0x{}, bodyLen={}",
+                        Integer.toHexString(messageId & 0xFFFF), bodyLength);
             }
         } catch (Exception e) {
             logger.error("Failed to handle message: {}", e.getMessage());
         }
     }
 
-    /** 阻塞读取标准输入，解析 send/heartbeat/quit 指令并与当前会话交互 */
     private void startConsole() {
         Scanner scanner = new Scanner(System.in);
-        System.out.println("\n=== Player Client Console ===");
+        System.out.println("\n=== Player Client Console (Binary Protocol) ===");
         System.out.println("Commands:");
-        System.out.println("  send <gameId> <message> - Send game message");
-        System.out.println("  heartbeat - Send heartbeat");
-        System.out.println("  quit - Exit");
-        System.out.println("================================\n");
+        System.out.println("  move <x> <y> - Send battle.move");
+        System.out.println("  heartbeat    - Send heartbeat");
+        System.out.println("  quit         - Exit");
+        System.out.println("=================================================\n");
 
         while (currentSession != null && currentSession.isOpen()) {
             System.out.print("> ");
             String line = scanner.nextLine();
-            
-            if (line.startsWith("send ")) {
-                String[] parts = line.split(" ", 3);
+
+            if (line.startsWith("move ")) {
+                String[] parts = line.split(" ");
                 if (parts.length >= 3) {
-                    int gameId = Integer.parseInt(parts[1]);
-                    sendGameMessage(gameId, parts[2]);
+                    int x = Integer.parseInt(parts[1]);
+                    int y = Integer.parseInt(parts[2]);
+                    sendMoveMessage(x, y);
                 }
             } else if ("heartbeat".equals(line)) {
-                sendHeartbeat();
+                sendHeartbeatManual();
             } else if ("quit".equals(line)) {
                 disconnect();
                 break;
@@ -170,50 +183,55 @@ public class PlayerClientService {
         }
     }
 
-    /**
-     * 组装 {@code game_msg} 并同步发送（演示用）；需会话仍打开。
-     *
-     * @param gameId  目标逻辑游戏 ID
-     * @param content 写入 body.action 的文本
-     */
-    private void sendGameMessage(int gameId, String content) {
+    private void sendMoveMessage(int x, int y) {
         try {
-            Map<String, Object> message = Map.of(
-                "type", "game_msg",
-                "player_id", playerConfig.getPlayerId(),
-                "game_id", gameId,
-                "msg_type", "battle.move",
-                "seq", System.currentTimeMillis(),
-                "body", Map.of("action", content)
-            );
-            
-            if (currentSession != null && currentSession.isOpen()) {
-                currentSession.send(Mono.just(currentSession.textMessage(objectMapper.writeValueAsString(message)))).block();
-                logger.info("Game message sent to game {}", gameId);
-            }
+            CgBattleMove move = CgBattleMove.newBuilder().setX(x).setY(y).build();
+            sendBinaryMessage(currentSession, MSG_ID_BATTLE_MOVE, (short) 0, move.toByteArray());
+            logger.info("Sent battle.move: x={}, y={}", x, y);
         } catch (Exception e) {
             logger.error("Failed to send game message: {}", e.getMessage());
         }
     }
 
-    /** 手动触发一次心跳帧，供控制台命令调用 */
-    private void sendHeartbeat() {
+    private void sendHeartbeatManual() {
         try {
-            Map<String, Object> message = Map.of(
-                "type", "heartbeat",
-                "player_id", playerConfig.getPlayerId()
-            );
-            
-            if (currentSession != null && currentSession.isOpen()) {
-                currentSession.send(Mono.just(currentSession.textMessage(objectMapper.writeValueAsString(message)))).block();
-                logger.info("Heartbeat sent");
-            }
+            ClientHeartbeat hb = ClientHeartbeat.newBuilder()
+                    .setTimestamp(System.currentTimeMillis()).build();
+            sendBinaryMessage(currentSession, MSG_ID_HEARTBEAT, (short) 0, hb.toByteArray());
+            logger.info("Heartbeat sent");
         } catch (Exception e) {
             logger.error("Failed to send heartbeat: {}", e.getMessage());
         }
     }
 
-    /** 关闭 WebSocket 会话并结束控制台循环 */
+    /**
+     * 构建 14 字节头 + protobuf body 的二进制帧并发送。
+     */
+    private void sendBinaryMessage(WebSocketSession session, short messageId, short flags, byte[] body) {
+        if (session == null || !session.isOpen()) return;
+
+        ByteBuf buf = Unpooled.buffer(HEADER_SIZE + body.length);
+        buf.writeShort(flags);          // flags
+        buf.writeShort(0);              // sequence
+        buf.writeShort(messageId);      // messageId
+        buf.writeInt(body.length);      // bodyLength
+        buf.writeInt(0);                // requestId
+
+        if (body.length > 0) {
+            buf.writeBytes(body);
+        }
+
+        byte[] frameBytes = new byte[buf.readableBytes()];
+        buf.readBytes(frameBytes);
+        buf.release();
+
+        DataBufferFactory factory = new DefaultDataBufferFactory();
+        DataBuffer dataBuffer = factory.wrap(frameBytes);
+
+        session.send(Mono.just(session.binaryMessage(db -> dataBuffer)))
+                .subscribe(null, error -> logger.error("发送失败: {}", error.getMessage()));
+    }
+
     private void disconnect() {
         if (currentSession != null) {
             currentSession.close();

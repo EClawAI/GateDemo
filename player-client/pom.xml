@@ -15,6 +15,12 @@
     <description>玩家模拟客户端</description>
 
     <dependencies>
+        <!-- Common module (Proto classes, MessageRouteRegistry) -->
+        <dependency>
+            <groupId>com.clawai.gatedemo</groupId>
+            <artifactId>common</artifactId>
+        </dependency>
+
         <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

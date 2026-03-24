@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+import "gate_options.proto";
+
+option java_multiple_files = true;
+option java_package = "com.clawai.gatedemo.proto.gate";
+
+package gateprotocol;
+
+// ==================== 认证 ====================
+
+// 客户端 → 网关：认证请求 (messageId = 0x1001)
+message AuthRequest {
+  option (gateoptions.route_to) = "gate";
+  option (gateoptions.msg_id) = 4097;
+
+  string token = 1;
+  int32 game_id = 2;
+}
+
+// 网关 → 客户端：认证响应 (messageId = 0x1001, mode = RESPONSE)
+message AuthResponse {
+  bool success = 1;
+  int64 player_id = 2;
+  string message = 3;
+}
+
+// ==================== 心跳 ====================
+
+// 客户端 → 网关：心跳 (messageId = 0x2001)
+message ClientHeartbeat {
+  option (gateoptions.route_to) = "gate";
+  option (gateoptions.msg_id) = 8193;
+
+  int64 timestamp = 1;
+}
+
+// 网关 → 客户端：心跳应答 (messageId = 0x2002)
+message HeartbeatAck {
+  int64 server_time = 1;
+}
+
+// ==================== 通用 ====================
+
+// 网关 → 客户端：错误响应
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+}
+
+// 网关 → 客户端：服务器关闭通知 (mode = PUSH)
+message ServerShutdownNotice {
+  string reason = 1;
+}

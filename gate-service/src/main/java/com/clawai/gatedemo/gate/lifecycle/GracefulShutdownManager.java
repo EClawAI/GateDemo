@@ -1,8 +1,11 @@
 package com.clawai.gatedemo.gate.lifecycle;
 
-import com.clawai.gatedemo.gate.model.PlayerMessage;
+import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
+import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
+import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.clawai.gatedemo.gate.ws.NettyWebSocketServer;
+import com.clawai.gatedemo.proto.gate.ServerShutdownNotice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,19 +17,15 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 优雅关闭编排器
- * <p>
- * 在 JVM 关闭时按阶段执行：
- * 1. 停止接受新连接（关闭 Netty server channel）
- * 2. 通知已连接玩家服务器即将关闭
- * 3. 等待连接 drain，最长 drain-timeout 秒
- * 4. 超时后由 NettyWebSocketServer 的 stop() 强制关闭剩余连接
+ * 优雅关闭编排器：停止接受新连接 → 通知玩家 → 等待 drain → 强制关闭。
  */
 @Component
 @DependsOn("nettyWebSocketServer")
 public class GracefulShutdownManager {
 
     private static final Logger logger = LoggerFactory.getLogger(GracefulShutdownManager.class);
+
+    private static final short MSG_ID_SHUTDOWN = 0x0001;
 
     private final NettyWebSocketServer nettyWebSocketServer;
     private final PlayerService playerService;
@@ -37,18 +36,11 @@ public class GracefulShutdownManager {
     @Value("${gate.shutdown.enabled:true}")
     private boolean enabled;
 
-    /**
-     * @param nettyWebSocketServer 用于停止 accept 与后续 Netty 关闭
-     * @param playerService        广播关服通知并轮询在线数
-     */
     public GracefulShutdownManager(NettyWebSocketServer nettyWebSocketServer, PlayerService playerService) {
         this.nettyWebSocketServer = nettyWebSocketServer;
         this.playerService = playerService;
     }
 
-    /**
-     * 容器销毁前执行：停接入、通知玩家、等待 drain；禁用或中断时提前返回。
-     */
     @PreDestroy
     public void onShutdown() {
         if (!enabled) {
@@ -58,24 +50,25 @@ public class GracefulShutdownManager {
 
         logger.info("=== 开始优雅关闭，drain 超时 {} 秒 ===", drainTimeoutSeconds);
 
-        // 阶段一：停止接受新连接
         nettyWebSocketServer.stopAccepting();
         logger.info("阶段一完成：已停止接受新连接");
 
-        // 阶段二：通知玩家并等待 drain
         Set<Long> playerIds = playerService.getAllOnlinePlayerIds();
         int count = playerIds.size();
 
         if (count > 0) {
             logger.info("阶段二：通知 {} 个玩家服务器即将关闭", count);
 
-            PlayerMessage shutdownNotice = new PlayerMessage();
-            shutdownNotice.setType("server_shutdown");
-            shutdownNotice.setTimestamp(System.currentTimeMillis());
-            shutdownNotice.setBody(java.util.Map.of("reason", "Server is shutting down, please reconnect later"));
+            ServerShutdownNotice notice = ServerShutdownNotice.newBuilder()
+                    .setReason("Server is shutting down, please reconnect later").build();
+
+            WrappedMessage shutdownMsg = new WrappedMessage();
+            shutdownMsg.getHeader().setMessageId(MSG_ID_SHUTDOWN);
+            shutdownMsg.getHeader().setMode(MessageHeader.MODE_PUSH);
+            shutdownMsg.setBody(new RawMessageBody(notice.toByteArray()));
 
             for (Long playerId : playerIds) {
-                playerService.sendToPlayer(playerId, shutdownNotice);
+                playerService.sendToPlayer(playerId, shutdownMsg);
             }
 
             long deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(drainTimeoutSeconds);

@@ -2,7 +2,6 @@ package com.clawai.gatedemo.gate.grpc;
 
 import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.grpc.GameMessage;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,12 +15,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * GameGrpcClientPool 单元测试
- * 
- * 测试内容：
- * 1. Stream连接建立
- * 2. Stream消息发送
- * 3. Stream消息接收
- * 4. 断线重连
  */
 @ExtendWith(MockitoExtension.class)
 class GameGrpcClientPoolTest {
@@ -29,19 +22,15 @@ class GameGrpcClientPoolTest {
     @Mock
     private GateConfig gateConfig;
 
-    private ObjectMapper objectMapper;
     private GameGrpcClientPool clientPool;
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
-        
-        // 模拟配置
         if (gateConfig == null) {
             gateConfig = new GateConfig();
         }
         
-        clientPool = new GameGrpcClientPool(gateConfig, objectMapper);
+        clientPool = new GameGrpcClientPool(gateConfig);
     }
 
     @Test

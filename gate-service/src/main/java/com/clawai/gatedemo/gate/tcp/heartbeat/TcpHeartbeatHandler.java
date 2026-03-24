@@ -1,6 +1,6 @@
 package com.clawai.gatedemo.gate.tcp.heartbeat;
 
-import com.clawai.gatedemo.gate.protocol.MessageIdRegistry;
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -20,7 +20,7 @@ public class TcpHeartbeatHandler extends IdleStateHandler {
     private static final short HEARTBEAT_MSG_ID;
 
     static {
-        HEARTBEAT_MSG_ID = MessageIdRegistry.getIdByName("heartbeat");
+        HEARTBEAT_MSG_ID = MessageRouteRegistry.getIdByName("ClientHeartbeat");
     }
 
     /**
