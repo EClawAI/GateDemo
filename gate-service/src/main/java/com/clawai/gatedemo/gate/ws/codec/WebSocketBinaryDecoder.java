@@ -25,7 +25,7 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
 
     private static final Logger logger = LoggerFactory.getLogger(WebSocketBinaryDecoder.class);
 
-    private static final int HEADER_SIZE = 14;
+    private static final int HEADER_SIZE = 16;
     private static final int MAX_BODY_LENGTH = 10 * 1024 * 1024;
 
     @Override
@@ -40,7 +40,7 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
 
         short flags = in.readShort();
         short sequence = in.readShort();
-        short messageId = in.readShort();
+        int messageId = in.readInt();
         int bodyLength = in.readInt();
         int requestId = in.readInt();
 
@@ -71,14 +71,14 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
             if (header.isCompressed()) {
                 bodyBytes = decompress(bodyBytes);
                 if (bodyBytes == null) {
-                    logger.error("解压失败: messageId=0x{}", Integer.toHexString(messageId & 0xFFFF));
+                    logger.error("解压失败: messageId={}", messageId);
                     return;
                 }
             }
         }
 
         WrappedMessage message = new WrappedMessage(header, new RawMessageBody(bodyBytes));
-        logger.debug("WS 解码: msgId=0x{}, bodyLen={}", Integer.toHexString(messageId & 0xFFFF), bodyLength);
+        logger.debug("WS 解码: msgId={}, bodyLen={}", messageId, bodyLength);
         out.add(message);
     }
 

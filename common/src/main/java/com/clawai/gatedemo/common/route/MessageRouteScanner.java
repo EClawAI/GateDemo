@@ -9,14 +9,6 @@ import org.slf4j.LoggerFactory;
 /**
  * 扫描 proto {@link Descriptors.FileDescriptor}，读取 {@code route_to} 和 {@code msg_id}
  * 自定义 option，自动填充 {@link MessageRouteRegistry}。
- * <p>
- * 在应用启动时调用一次：
- * <pre>
- * MessageRouteScanner.scan(
- *     GateProtocol.getDescriptor(),
- *     GameMessages.getDescriptor()
- * );
- * </pre>
  */
 public final class MessageRouteScanner {
 
@@ -24,9 +16,7 @@ public final class MessageRouteScanner {
 
     private MessageRouteScanner() {}
 
-    /**
-     * 扫描给定的 proto 文件描述符，将含有 route_to + msg_id 的消息自动注册到路由表。
-     */
+    /** 扫描给定的 proto 文件描述符，将含有 route_to + msg_id 的消息自动注册到路由表。 */
     public static void scan(Descriptors.FileDescriptor... fileDescriptors) {
         int count = 0;
         for (Descriptors.FileDescriptor fd : fileDescriptors) {
@@ -49,12 +39,11 @@ public final class MessageRouteScanner {
         }
 
         String routeTo = (String) options.getField(GateOptionsProto.routeTo.getDescriptor());
-        int msgIdInt = (int) options.getField(GateOptionsProto.msgId.getDescriptor());
-        short msgId = (short) msgIdInt;
+        int msgId = (int) options.getField(GateOptionsProto.msgId.getDescriptor());
         String name = msgDesc.getName();
 
         MessageRouteRegistry.register(name, msgId, routeTo);
-        logger.debug("注册路由: {} -> msgId=0x{}, service={}", name, Integer.toHexString(msgId & 0xFFFF), routeTo);
+        logger.debug("注册路由: {} -> msgId={}, service={}", name, msgId, routeTo);
         return 1;
     }
 }

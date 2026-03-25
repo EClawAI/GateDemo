@@ -45,10 +45,10 @@ public class WebSocketBinaryEncoder extends MessageToMessageEncoder<WrappedMessa
         header.setBodyLength(finalBodyBytes.length);
         header.setCompressed(needCompress);
 
-        ByteBuf buf = ctx.alloc().buffer(14 + finalBodyBytes.length);
+        ByteBuf buf = ctx.alloc().buffer(16 + finalBodyBytes.length);
         buf.writeShort(header.getFlags());
         buf.writeShort(header.getSequence());
-        buf.writeShort(header.getMessageId());
+        buf.writeInt(header.getMessageId());
         buf.writeInt(header.getBodyLength());
         buf.writeInt(header.getRequestId());
 

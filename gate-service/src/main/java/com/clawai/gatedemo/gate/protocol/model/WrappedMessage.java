@@ -63,7 +63,7 @@ public class WrappedMessage {
     }
 
     /** 仅指定消息类型 ID 时常用，头其余字段由后续逻辑补全。 */
-    public WrappedMessage(short messageId, MessageBody body) {
+    public WrappedMessage(int messageId, MessageBody body) {
         this.header = new MessageHeader(messageId);
         this.body = body;
     }

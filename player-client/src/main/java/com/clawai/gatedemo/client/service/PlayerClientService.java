@@ -33,12 +33,12 @@ public class PlayerClientService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientService.class);
 
-    private static final short MSG_ID_AUTH = 0x1001;
-    private static final short MSG_ID_HEARTBEAT = 0x2001;
-    private static final short MSG_ID_HEARTBEAT_ACK = 0x2002;
-    private static final short MSG_ID_BATTLE_MOVE = 0x3001;
+    private static final int MSG_ID_AUTH = 0x1001;
+    private static final int MSG_ID_HEARTBEAT = 0x2001;
+    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
+    private static final int MSG_ID_BATTLE_MOVE = 0x3001;
 
-    private static final int HEADER_SIZE = 14;
+    private static final int HEADER_SIZE = 16;
 
     private final PlayerConfig playerConfig;
     private final ReactorNettyWebSocketClient webSocketClient = new ReactorNettyWebSocketClient();
@@ -86,7 +86,7 @@ public class PlayerClientService {
                     .setGameId(1001)
                     .build();
 
-            sendBinaryMessage(session, MSG_ID_AUTH, (short) 0x0000, authReq.toByteArray());
+            sendBinaryMessage(session, MSG_ID_AUTH, 0x0000, authReq.toByteArray());
             logger.info("Auth message sent (binary)");
         } catch (Exception e) {
             logger.error("Failed to send auth: {}", e.getMessage());
@@ -101,7 +101,7 @@ public class PlayerClientService {
                     if (currentSession != null && currentSession.isOpen()) {
                         ClientHeartbeat hb = ClientHeartbeat.newBuilder()
                                 .setTimestamp(System.currentTimeMillis()).build();
-                        sendBinaryMessage(session, MSG_ID_HEARTBEAT, (short) 0, hb.toByteArray());
+                        sendBinaryMessage(session, MSG_ID_HEARTBEAT, 0, hb.toByteArray());
                         logger.debug("Heartbeat sent (binary)");
                     }
                 } catch (InterruptedException e) {
@@ -125,7 +125,7 @@ public class PlayerClientService {
 
             short flags = bb.getShort();
             short sequence = bb.getShort();
-            short messageId = bb.getShort();
+            int messageId = bb.getInt();
             int bodyLength = bb.getInt();
             int requestId = bb.getInt();
 
@@ -146,8 +146,8 @@ public class PlayerClientService {
                 HeartbeatAck ack = HeartbeatAck.parseFrom(bodyBytes);
                 logger.debug("Heartbeat acknowledged: serverTime={}", ack.getServerTime());
             } else {
-                logger.info("Received message: msgId=0x{}, bodyLen={}",
-                        Integer.toHexString(messageId & 0xFFFF), bodyLength);
+                logger.info("Received message: msgId={}, bodyLen={}",
+                        messageId, bodyLength);
             }
         } catch (Exception e) {
             logger.error("Failed to handle message: {}", e.getMessage());
@@ -186,7 +186,7 @@ public class PlayerClientService {
     private void sendMoveMessage(int x, int y) {
         try {
             CgBattleMove move = CgBattleMove.newBuilder().setX(x).setY(y).build();
-            sendBinaryMessage(currentSession, MSG_ID_BATTLE_MOVE, (short) 0, move.toByteArray());
+            sendBinaryMessage(currentSession, MSG_ID_BATTLE_MOVE, 0, move.toByteArray());
             logger.info("Sent battle.move: x={}, y={}", x, y);
         } catch (Exception e) {
             logger.error("Failed to send game message: {}", e.getMessage());
@@ -197,7 +197,7 @@ public class PlayerClientService {
         try {
             ClientHeartbeat hb = ClientHeartbeat.newBuilder()
                     .setTimestamp(System.currentTimeMillis()).build();
-            sendBinaryMessage(currentSession, MSG_ID_HEARTBEAT, (short) 0, hb.toByteArray());
+            sendBinaryMessage(currentSession, MSG_ID_HEARTBEAT, 0, hb.toByteArray());
             logger.info("Heartbeat sent");
         } catch (Exception e) {
             logger.error("Failed to send heartbeat: {}", e.getMessage());
@@ -207,13 +207,13 @@ public class PlayerClientService {
     /**
      * 构建 14 字节头 + protobuf body 的二进制帧并发送。
      */
-    private void sendBinaryMessage(WebSocketSession session, short messageId, short flags, byte[] body) {
+    private void sendBinaryMessage(WebSocketSession session, int messageId, int flags, byte[] body) {
         if (session == null || !session.isOpen()) return;
 
         ByteBuf buf = Unpooled.buffer(HEADER_SIZE + body.length);
         buf.writeShort(flags);          // flags
         buf.writeShort(0);              // sequence
-        buf.writeShort(messageId);      // messageId
+        buf.writeInt(messageId);        // messageId
         buf.writeInt(body.length);      // bodyLength
         buf.writeInt(0);                // requestId
 

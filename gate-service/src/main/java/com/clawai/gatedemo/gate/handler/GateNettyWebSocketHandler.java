@@ -47,9 +47,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
     private static final AttributeKey<Boolean> CONNECTION_ACQUIRED = AttributeKey.valueOf("connectionAcquired");
 
-    private static final short MSG_ID_AUTH = 0x1001;
-    private static final short MSG_ID_HEARTBEAT = 0x2001;
-    private static final short MSG_ID_HEARTBEAT_ACK = 0x2002;
+    private static final int MSG_ID_AUTH = 0x1001;
+    private static final int MSG_ID_HEARTBEAT = 0x2001;
+    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
 
     private final PlayerService playerService;
     private final TokenValidator tokenValidator;
@@ -95,7 +95,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
             return;
         }
 
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
 
         String validationError = messageValidator.validate(message);
         if (validationError != null) {
@@ -114,8 +114,8 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
             if (messageId == MSG_ID_AUTH) {
                 handleAuth(ctx, message);
             } else {
-                logger.warn("未认证连接发送非认证消息 msgId=0x{}, 关闭连接：{}",
-                        Integer.toHexString(messageId & 0xFFFF), ctx.channel().remoteAddress());
+                logger.warn("未认证连接发送非认证消息 msgId={}, 关闭连接：{}",
+                        messageId, ctx.channel().remoteAddress());
                 ctx.close();
             }
             return;
@@ -139,24 +139,24 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         } else if (targetService != null) {
             handleServiceForward(ctx, messageId, targetService, message);
         } else {
-            logger.warn("未注册的 messageId=0x{} from {}",
-                    Integer.toHexString(messageId & 0xFFFF), ctx.channel().remoteAddress());
+            logger.warn("未注册的 messageId={} from {}",
+                    messageId, ctx.channel().remoteAddress());
         }
     }
 
-    private void handleGateMessage(ChannelHandlerContext ctx, short messageId, WrappedMessage message) {
+    private void handleGateMessage(ChannelHandlerContext ctx, int messageId, WrappedMessage message) {
         if (messageId == MSG_ID_HEARTBEAT) {
             handleHeartbeat(ctx, message);
         } else {
-            logger.warn("Gate 本地不支持处理 messageId=0x{}", Integer.toHexString(messageId & 0xFFFF));
+            logger.warn("Gate 本地不支持处理 messageId={}", messageId);
         }
     }
 
-    private void handleServiceForward(ChannelHandlerContext ctx, short messageId,
+    private void handleServiceForward(ChannelHandlerContext ctx, int messageId,
                                        String targetService, WrappedMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId == null) {
-            logger.warn("玩家未绑定，无法转发 messageId=0x{}", Integer.toHexString(messageId & 0xFFFF));
+            logger.warn("玩家未绑定，无法转发 messageId={}", messageId);
             return;
         }
 
@@ -274,7 +274,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
     }
 
     /** 发送带 protobuf body 的响应消息。 */
-    private void sendResponse(ChannelHandlerContext ctx, short messageId, short mode, byte[] body) {
+    private void sendResponse(ChannelHandlerContext ctx, int messageId, short mode, byte[] body) {
         WrappedMessage reply = new WrappedMessage();
         reply.getHeader().setMessageId(messageId);
         reply.getHeader().setMode(mode);
@@ -283,7 +283,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
     }
 
     /** 发送 ErrorResponse 消息。 */
-    private void sendError(ChannelHandlerContext ctx, short messageId, String code, String message) {
+    private void sendError(ChannelHandlerContext ctx, int messageId, String code, String message) {
         ErrorResponse err = ErrorResponse.newBuilder().setCode(code).setMessage(message).build();
         sendResponse(ctx, messageId, MessageHeader.MODE_RESPONSE, err.toByteArray());
     }

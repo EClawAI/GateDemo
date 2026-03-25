@@ -1,21 +1,18 @@
 package com.clawai.gatedemo.client.protocol.model;
 
 /**
- * 14 字节二进制帧头在客户端侧的镜像：承载标志位、序号、消息 ID、体长与请求 ID，并提供压缩/模式等语义辅助。
+ * 16 字节二进制帧头在客户端侧的镜像：承载标志位、序号、消息 ID、体长与请求 ID。
  */
 public class MessageHeader {
 
     private short flags;
     private short sequence;
-    private short messageId;
+    private int messageId;
     private int bodyLength;
     private int requestId;
 
-    /** 体经 zlib 等压缩时置位，与解码侧解压逻辑对应 */
     public static final int FLAG_COMPRESSED = 0x8000;
-    /** 预留加密标志，当前演示客户端未实现加解密 */
     public static final int FLAG_ENCRYPTED = 0x4000;
-    /** 请求/响应/推送模式占用的 flags 位段 */
     public static final int FLAG_MASK_MODE = 0x00C0;
 
     public static final short MODE_REQUEST = 0x0000;
@@ -25,14 +22,10 @@ public class MessageHeader {
     public MessageHeader() {
     }
 
-    /**
-     * @param messageId 业务短消息 ID，其余字段默认零
-     */
-    public MessageHeader(short messageId) {
+    public MessageHeader(int messageId) {
         this.messageId = messageId;
     }
 
-    /** @return 是否携带压缩标志位 */
     public boolean isCompressed() {
         return (flags & FLAG_COMPRESSED) != 0;
     }
@@ -65,45 +58,20 @@ public class MessageHeader {
         flags = (short) ((flags & ~FLAG_MASK_MODE) | (mode & FLAG_MASK_MODE));
     }
 
-    public short getFlags() {
-        return flags;
-    }
+    public short getFlags() { return flags; }
+    public void setFlags(short flags) { this.flags = flags; }
 
-    public void setFlags(short flags) {
-        this.flags = flags;
-    }
+    public short getSequence() { return sequence; }
+    public void setSequence(short sequence) { this.sequence = sequence; }
 
-    public short getSequence() {
-        return sequence;
-    }
+    public int getMessageId() { return messageId; }
+    public void setMessageId(int messageId) { this.messageId = messageId; }
 
-    public void setSequence(short sequence) {
-        this.sequence = sequence;
-    }
+    public int getBodyLength() { return bodyLength; }
+    public void setBodyLength(int bodyLength) { this.bodyLength = bodyLength; }
 
-    public short getMessageId() {
-        return messageId;
-    }
-
-    public void setMessageId(short messageId) {
-        this.messageId = messageId;
-    }
-
-    public int getBodyLength() {
-        return bodyLength;
-    }
-
-    public void setBodyLength(int bodyLength) {
-        this.bodyLength = bodyLength;
-    }
-
-    public int getRequestId() {
-        return requestId;
-    }
-
-    public void setRequestId(int requestId) {
-        this.requestId = requestId;
-    }
+    public int getRequestId() { return requestId; }
+    public void setRequestId(int requestId) { this.requestId = requestId; }
 
     @Override
     public String toString() {

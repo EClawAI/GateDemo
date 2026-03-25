@@ -29,7 +29,7 @@ public class WrappedMessage {
      * @param messageId 业务消息 ID
      * @param body      载荷
      */
-    public WrappedMessage(short messageId, MessageBody body) {
+    public WrappedMessage(int messageId, MessageBody body) {
         this.header = new MessageHeader(messageId);
         this.body = body;
     }

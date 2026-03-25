@@ -25,10 +25,10 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerNettyHandler.class);
 
-    private static final short MSG_ID_AUTH = 0x1001;
-    private static final short MSG_ID_HEARTBEAT = 0x2001;
-    private static final short MSG_ID_HEARTBEAT_ACK = 0x2002;
-    private static final short MSG_ID_BATTLE_MOVE = 0x3001;
+    private static final int MSG_ID_AUTH = 0x1001;
+    private static final int MSG_ID_HEARTBEAT = 0x2001;
+    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
+    private static final int MSG_ID_BATTLE_MOVE = 0x3001;
 
     private final PlayerClientConfig config;
     private boolean connected = false;
@@ -57,7 +57,7 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WrappedMessage message) throws Exception {
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
         byte[] bodyBytes = message.getBody() != null ? message.getBody().toBytes() : new byte[0];
 
         if (messageId == MSG_ID_AUTH) {

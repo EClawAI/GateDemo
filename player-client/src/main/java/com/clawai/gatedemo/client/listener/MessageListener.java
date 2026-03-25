@@ -16,7 +16,7 @@ public class MessageListener {
     private static final Logger logger = LoggerFactory.getLogger(MessageListener.class);
 
     /** 按消息 ID 注册的下行回调；并发注册与 {@link #onMessage(WrappedMessage)} 分发场景下使用线程安全 Map */
-    private final Map<Short, Consumer<WrappedMessage>> listeners = new ConcurrentHashMap<>();
+    private final Map<Integer, Consumer<WrappedMessage>> listeners = new ConcurrentHashMap<>();
     /** 未注册消息 ID 时的兜底处理，默认仅打调试日志 */
     private final Consumer<WrappedMessage> defaultListener;
 
@@ -30,7 +30,7 @@ public class MessageListener {
      * @param messageId 协议短消息 ID
      * @param listener  收到对应下行报文时在调用线程执行
      */
-    public void register(short messageId, Consumer<WrappedMessage> listener) {
+    public void register(int messageId, Consumer<WrappedMessage> listener) {
         listeners.put(messageId, listener);
         logger.info("Registered listener for messageId: {}", messageId);
     }
@@ -40,7 +40,7 @@ public class MessageListener {
      *
      * @param messageId 协议短消息 ID
      */
-    public void unregister(short messageId) {
+    public void unregister(int messageId) {
         listeners.remove(messageId);
     }
 
@@ -55,7 +55,7 @@ public class MessageListener {
             return;
         }
 
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
         Consumer<WrappedMessage> listener = listeners.get(messageId);
 
         if (listener != null) {
@@ -79,7 +79,7 @@ public class MessageListener {
      *
      * @return 消息 ID 到监听器的拷贝
      */
-    public Map<Short, Consumer<WrappedMessage>> getListeners() {
+    public Map<Integer, Consumer<WrappedMessage>> getListeners() {
         return new ConcurrentHashMap<>(listeners);
     }
 }

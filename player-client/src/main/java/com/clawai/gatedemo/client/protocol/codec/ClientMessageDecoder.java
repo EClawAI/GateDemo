@@ -21,7 +21,7 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientMessageDecoder.class);
 
-    private static final int HEADER_SIZE = 14;
+    private static final int HEADER_SIZE = 16;
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
@@ -33,7 +33,7 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
 
         short flags = in.readShort();
         short sequence = in.readShort();
-        short messageId = in.readShort();
+        int messageId = in.readInt();
         int bodyLength = in.readInt();
         int requestId = in.readInt();
 

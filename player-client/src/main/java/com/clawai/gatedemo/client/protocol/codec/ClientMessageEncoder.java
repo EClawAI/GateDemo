@@ -49,7 +49,7 @@ public class ClientMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
 
         out.writeShort(header.getFlags());
         out.writeShort(header.getSequence());
-        out.writeShort(header.getMessageId());
+        out.writeInt(header.getMessageId());
         out.writeInt(header.getBodyLength());
         out.writeInt(header.getRequestId());
 

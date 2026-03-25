@@ -40,7 +40,7 @@ public class RequestManager {
      * @param timeoutMs   超时毫秒数
      * @return 本次请求分配的 requestId
      */
-    public int sendRequest(short messageId, WrappedMessage message, Consumer<WrappedMessage> callback, long timeoutMs) {
+    public int sendRequest(int messageId, WrappedMessage message, Consumer<WrappedMessage> callback, long timeoutMs) {
         int requestId = nextRequestId++;
         message.getHeader().setRequestId(requestId);
 

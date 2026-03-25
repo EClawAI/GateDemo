@@ -30,10 +30,10 @@ public class MessageValidator {
             return "Message is null";
         }
 
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
 
         if (MessageRouteRegistry.getByMsgId(messageId) == null) {
-            return "Unknown messageId: 0x" + Integer.toHexString(messageId & 0xFFFF);
+            return "Unknown messageId: " + messageId;
         }
 
         int bodyLength = message.getHeader().getBodyLength();

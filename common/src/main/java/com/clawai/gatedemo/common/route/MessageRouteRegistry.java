@@ -11,26 +11,24 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class MessageRouteRegistry {
 
     /**
-     * 路由信息：消息 ID、消息名称、目标服务。
+     * 路由信息：消息 ID（32 位）、消息名称、目标服务。
      */
-    public record RouteInfo(short msgId, String name, String targetService) {}
+    public record RouteInfo(int msgId, String name, String targetService) {}
 
-    private static final Map<Short, RouteInfo> ID_MAP = new ConcurrentHashMap<>();
+    private static final Map<Integer, RouteInfo> ID_MAP = new ConcurrentHashMap<>();
     private static final Map<String, RouteInfo> NAME_MAP = new ConcurrentHashMap<>();
 
     private MessageRouteRegistry() {}
 
-    /**
-     * 注册一条路由（重复 msgId 会覆盖）。
-     */
-    public static void register(String name, short msgId, String targetService) {
+    /** 注册一条路由（重复 msgId 会覆盖）。 */
+    public static void register(String name, int msgId, String targetService) {
         RouteInfo info = new RouteInfo(msgId, name, targetService);
         ID_MAP.put(msgId, info);
         NAME_MAP.put(name, info);
     }
 
     /** 按 messageId 查路由，未注册返回 null。 */
-    public static RouteInfo getByMsgId(short msgId) {
+    public static RouteInfo getByMsgId(int msgId) {
         return ID_MAP.get(msgId);
     }
 
@@ -40,23 +38,19 @@ public final class MessageRouteRegistry {
     }
 
     /** 按 messageId 查目标服务，未注册返回 null。 */
-    public static String getTargetService(short msgId) {
+    public static String getTargetService(int msgId) {
         RouteInfo info = ID_MAP.get(msgId);
         return info != null ? info.targetService() : null;
     }
 
-    /**
-     * 按消息名查 messageId；未注册返回 0。
-     */
-    public static short getIdByName(String name) {
+    /** 按消息名查 messageId；未注册返回 0。 */
+    public static int getIdByName(String name) {
         RouteInfo info = NAME_MAP.get(name);
         return info != null ? info.msgId() : 0;
     }
 
-    /**
-     * 按 messageId 查消息名；未注册返回 null。
-     */
-    public static String getNameById(short msgId) {
+    /** 按 messageId 查消息名；未注册返回 null。 */
+    public static String getNameById(int msgId) {
         RouteInfo info = ID_MAP.get(msgId);
         return info != null ? info.name() : null;
     }

@@ -93,7 +93,7 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
         // 写入顺序必须与解码器一致
         out.writeShort(header.getFlags());      // 2字节：标志位
         out.writeShort(header.getSequence());   // 2字节：序列号
-        out.writeShort(header.getMessageId());  // 2字节：消息ID
+        out.writeInt(header.getMessageId());    // 4字节：消息ID
         out.writeInt(header.getBodyLength());   // 4字节：消息体长度
         out.writeInt(header.getRequestId());    // 4字节：请求ID
 

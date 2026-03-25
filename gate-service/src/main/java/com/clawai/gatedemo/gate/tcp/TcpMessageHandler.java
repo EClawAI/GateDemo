@@ -42,7 +42,7 @@ public class TcpMessageHandler extends SimpleChannelInboundHandler<WrappedMessag
         }
 
         MessageHeader header = message.getHeader();
-        short messageId = header.getMessageId();
+        int messageId = header.getMessageId();
 
         logger.debug("TCP received: msgId={}, seq={}", messageId, header.getSequence());
 

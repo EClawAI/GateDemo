@@ -25,7 +25,7 @@ public class GracefulShutdownManager {
 
     private static final Logger logger = LoggerFactory.getLogger(GracefulShutdownManager.class);
 
-    private static final short MSG_ID_SHUTDOWN = 0x0001;
+    private static final int MSG_ID_SHUTDOWN = 0x0001;
 
     private final NettyWebSocketServer nettyWebSocketServer;
     private final PlayerService playerService;

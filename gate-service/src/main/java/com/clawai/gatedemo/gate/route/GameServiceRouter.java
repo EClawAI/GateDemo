@@ -38,7 +38,7 @@ public class GameServiceRouter implements ServiceRouter {
             return;
         }
 
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
         MessageRouteRegistry.RouteInfo route = MessageRouteRegistry.getByMsgId(messageId);
         String msgType = route != null ? route.name() : "unknown";
         byte[] rawBody = message.getBody() != null ? message.getBody().toBytes() : new byte[0];

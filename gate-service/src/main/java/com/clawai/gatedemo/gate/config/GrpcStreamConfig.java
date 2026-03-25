@@ -35,7 +35,7 @@ public class GrpcStreamConfig {
             String msgType = message.getMsgType();
             byte[] bodyBytes = message.getBody().toByteArray();
 
-            short messageId = MessageRouteRegistry.getIdByName(msgType);
+            int messageId = MessageRouteRegistry.getIdByName(msgType);
 
             WrappedMessage wm = new WrappedMessage();
             wm.getHeader().setMessageId(messageId);

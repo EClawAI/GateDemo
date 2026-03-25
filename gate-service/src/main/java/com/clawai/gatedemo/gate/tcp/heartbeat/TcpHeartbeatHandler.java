@@ -17,7 +17,7 @@ public class TcpHeartbeatHandler extends IdleStateHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(TcpHeartbeatHandler.class);
 
-    private static final short HEARTBEAT_MSG_ID;
+    private static final int HEARTBEAT_MSG_ID;
 
     static {
         HEARTBEAT_MSG_ID = MessageRouteRegistry.getIdByName("ClientHeartbeat");

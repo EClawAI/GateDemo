@@ -34,15 +34,15 @@ public class MessageDispatcher {
     }
 
     private void registerDefaultHandlers() {
-        register((short) 0x1001, new AuthHandler());
-        register((short) 0x2001, new HeartbeatHandler());
+        register(0x1001, new AuthHandler());
+        register(0x2001, new HeartbeatHandler());
     }
 
     /**
      * @param messageId 消息号
      * @param handler   业务处理器
      */
-    public void register(short messageId, MessageHandler handler) {
+    public void register(int messageId, MessageHandler handler) {
         registry.register(messageId, handler);
         logger.info("Registered handler for messageId: {}", messageId);
     }
@@ -55,7 +55,7 @@ public class MessageDispatcher {
             return;
         }
 
-        short messageId = message.getHeader().getMessageId();
+        int messageId = message.getHeader().getMessageId();
         MessageHandler handler = registry.getHandler(messageId);
 
         if (handler == null) {

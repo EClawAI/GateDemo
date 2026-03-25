@@ -55,8 +55,8 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
     /** 日志记录器 */
     private static final Logger logger = LoggerFactory.getLogger(GameMessageDecoder.class);
 
-    /** 消息头固定长度：14字节 */
-    private static final int HEADER_SIZE = 14;
+    /** 消息头固定长度：16字节 */
+    private static final int HEADER_SIZE = 16;
 
     /** 消息体最大长度：10MB，防止内存溢出 */
     private static final int MAX_BODY_LENGTH = 10 * 1024 * 1024;
@@ -84,7 +84,7 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
         // 读取顺序必须与Encoder写入顺序完全一致
         short flags = in.readShort();      // 2字节：标志位
         short sequence = in.readShort();   // 2字节：序列号
-        short messageId = in.readShort();  // 2字节：消息ID
+        int messageId = in.readInt();      // 4字节：消息ID
         int bodyLength = in.readInt();     // 4字节：消息体长度
         int requestId = in.readInt();      // 4字节：请求ID
 
