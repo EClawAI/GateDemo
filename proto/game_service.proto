@@ -10,11 +10,11 @@ package gameservice;
 message GameMessage {
     string gate_id = 1;           // 网关 ID
     int64 player_id = 2;          // 玩家 ID
-    int32 game_id = 3;            // 游戏 ID
+    reserved 3;                   // 已移除：game_id（连接级已确定目标实例）
     int32 msg_id = 4;             // 消息 ID（CRC32 哈希，与客户端协议头一致）
     int32 seq = 5;                // 消息序列号
     int64 timestamp = 6;          // 消息时间戳
-    bytes body = 7;                 // 消息体（二进制Protobuf数据）
+    bytes body = 7;               // 消息体（二进制Protobuf数据）
 }
 
 // Game 服务返回的响应

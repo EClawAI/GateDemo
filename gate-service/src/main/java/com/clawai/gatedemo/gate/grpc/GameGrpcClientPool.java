@@ -255,7 +255,7 @@ public class GameGrpcClientPool {
             public void onNext(GameMessage message) {
                 // 收到Game服务端推送的消息
                 logger.debug("收到 Game Stream 消息: gameId={}, playerId={}, msgId={}", 
-                    message.getGameId(), message.getPlayerId(), message.getMsgId());
+                    conn.gameId, message.getPlayerId(), message.getMsgId());
                 
                 // 回调处理
                 if (streamMessageHandler != null) {
@@ -340,7 +340,6 @@ public class GameGrpcClientPool {
             GameMessage message = GameMessage.newBuilder()
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
-                .setGameId(gameId)
                 .setMsgId(msgId)
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
@@ -380,7 +379,6 @@ public class GameGrpcClientPool {
             GameMessage message = GameMessage.newBuilder()
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
-                .setGameId(gameId)
                 .setMsgId(msgId)
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())

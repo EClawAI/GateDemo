@@ -127,12 +127,11 @@ public class GameGrpcServer {
         @Override
         public void sendGameMessage(GameMessage request, StreamObserver<GameResponse> responseObserver) {
             try {
-                logger.debug("收到 Unary 消息: gateId={}, playerId={}, gameId={}, msgId={}",
-                    request.getGateId(), request.getPlayerId(), request.getGameId(), request.getMsgId());
+                logger.debug("收到 Unary 消息: gateId={}, playerId={}, msgId={}",
+                    request.getGateId(), request.getPlayerId(), request.getMsgId());
 
                 dispatcher.dispatch(
                     request.getPlayerId(),
-                    request.getGameId(),
                     request.getMsgId(),
                     request.getSeq(),
                     request.getBody().toByteArray()
@@ -174,7 +173,7 @@ public class GameGrpcServer {
             logger.info("📡 Game Stream双向流通信已建立");
 
             GameMessageSender sender = new GameMessageSender(
-                    responseObserver, "game-" + gameId, gameId);
+                    responseObserver, "game-" + gameId);
             dispatcher.setSender(sender);
 
             return new StreamObserver<GameMessage>() {
@@ -186,7 +185,6 @@ public class GameGrpcServer {
                     try {
                         dispatcher.dispatch(
                             request.getPlayerId(),
-                            request.getGameId(),
                             request.getMsgId(),
                             request.getSeq(),
                             request.getBody().toByteArray()

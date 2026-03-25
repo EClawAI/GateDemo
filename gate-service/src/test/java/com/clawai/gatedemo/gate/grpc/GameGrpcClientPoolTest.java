@@ -53,7 +53,6 @@ class GameGrpcClientPoolTest {
         GameMessage message = GameMessage.newBuilder()
             .setGateId("gate-01")
             .setPlayerId(12345L)
-            .setGameId(1001)
             .setMsgId(12345)
             .setSeq(1)
             .setTimestamp(System.currentTimeMillis())
@@ -63,7 +62,6 @@ class GameGrpcClientPoolTest {
         assertNotNull(message);
         assertEquals("gate-01", message.getGateId());
         assertEquals(12345L, message.getPlayerId());
-        assertEquals(1001, message.getGameId());
         assertEquals(12345, message.getMsgId());
         
         // 验证二进制转换
@@ -92,7 +90,6 @@ class GameGrpcClientPoolTest {
         GameMessage message = GameMessage.newBuilder()
             .setGateId("gate-01")
             .setPlayerId(12345L)
-            .setGameId(1001)
             .setMsgId(0)
             .setSeq(0)
             .setTimestamp(System.currentTimeMillis())

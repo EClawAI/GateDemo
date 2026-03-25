@@ -7,6 +7,7 @@ import com.clawai.gatedemo.game.persistence.PlayerDataManager;
 import com.google.protobuf.MessageLite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,6 +20,9 @@ public class GameMessageDispatcher {
 
     private final MessageHandlerRegistry registry;
     private final PlayerDataManager playerDataManager;
+
+    @Value("${game.id:1001}")
+    private int gameId;
 
     /** 下行发送器，由 gRPC stream 建立时注入。 */
     private volatile MessageSender sender;
@@ -34,16 +38,15 @@ public class GameMessageDispatcher {
     }
 
     /**
-     * 分发一条消息。由 gRPC 入口调用。
+     * 分发一条消息。由 gRPC 入口调用。gameId 取自本实例配置，无需消息携带。
      *
      * @param playerId  玩家 ID
-     * @param gameId    游戏实例 ID
      * @param messageId 消息 ID（CRC32）
      * @param seq       客户端序列号
      * @param body      protobuf 二进制 body
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public void dispatch(long playerId, int gameId, int messageId, int seq, byte[] body) {
+    public void dispatch(long playerId, int messageId, int seq, byte[] body) {
         MessageHandlerRegistry.HandlerEntry entry = registry.getHandler(messageId);
         if (entry == null) {
             logger.warn("未注册的 messageId={}", messageId);

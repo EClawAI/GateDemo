@@ -19,13 +19,10 @@ public class GameMessageSender implements MessageSender {
 
     private final StreamObserver<GameMessage> responseObserver;
     private final String gateId;
-    private final int gameId;
 
-    public GameMessageSender(StreamObserver<GameMessage> responseObserver,
-                             String gateId, int gameId) {
+    public GameMessageSender(StreamObserver<GameMessage> responseObserver, String gateId) {
         this.responseObserver = responseObserver;
         this.gateId = gateId;
-        this.gameId = gameId;
     }
 
     @Override
@@ -37,7 +34,6 @@ public class GameMessageSender implements MessageSender {
             GameMessage out = GameMessage.newBuilder()
                     .setGateId(gateId)
                     .setPlayerId(playerId)
-                    .setGameId(gameId)
                     .setMsgId(msgId)
                     .setSeq(0)
                     .setTimestamp(System.currentTimeMillis())
