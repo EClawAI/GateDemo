@@ -10,6 +10,4 @@ package gateoptions;
 extend google.protobuf.MessageOptions {
   // 目标服务: "gate", "game", "chat" 等
   optional string route_to = 50001;
-  // 16 位消息 ID（十进制表示，如 4097 = 0x1001）
-  optional int32 msg_id = 50002;
 }

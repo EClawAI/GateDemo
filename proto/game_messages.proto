@@ -9,19 +9,17 @@ package gamemessages;
 
 // ==================== 战斗 ====================
 
-// 客户端 → Game：移动 (messageId = 0x3001)
+// 客户端 → Game：移动
 message CgBattleMove {
   option (gateoptions.route_to) = "game";
-  option (gateoptions.msg_id) = 12289;
 
   int32 x = 1;
   int32 y = 2;
 }
 
-// 客户端 → Game：攻击 (messageId = 0x3002)
+// 客户端 → Game：攻击
 message CgBattleAttack {
   option (gateoptions.route_to) = "game";
-  option (gateoptions.msg_id) = 12290;
 
   int64 target_id = 1;
   int32 skill_id = 2;

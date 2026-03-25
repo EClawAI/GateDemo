@@ -1,14 +1,26 @@
 package com.clawai.gatedemo.common.route;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 消息路由注册表：维护 messageId ↔ 消息名 ↔ 目标服务 的映射关系。
- * 由 {@link MessageRouteScanner} 启动时自动扫描 proto descriptor 填充，
+ * 启动时通过 {@link #loadFromJson(String)} 从 classpath 中的 JSON 文件加载，
  * 也支持手动 {@link #register} 补充。
  */
 public final class MessageRouteRegistry {
+
+    private static final Logger logger = LoggerFactory.getLogger(MessageRouteRegistry.class);
 
     /**
      * 路由信息：消息 ID（32 位）、消息名称、目标服务。
@@ -19,6 +31,47 @@ public final class MessageRouteRegistry {
     private static final Map<String, RouteInfo> NAME_MAP = new ConcurrentHashMap<>();
 
     private MessageRouteRegistry() {}
+
+    /**
+     * 从 classpath 资源加载 message_registry.json 并填充路由映射。
+     *
+     * @param resourcePath classpath 上的资源路径（如 "message_registry.json"）
+     * @throws IllegalStateException JSON 文件不存在或格式错误
+     */
+    public static void loadFromJson(String resourcePath) {
+        InputStream is = MessageRouteRegistry.class.getClassLoader()
+                .getResourceAsStream(resourcePath);
+        if (is == null) {
+            throw new IllegalStateException(
+                    "消息注册表文件未找到: " + resourcePath
+                    + "，请先运行 tools/gen_proto.sh 生成");
+        }
+
+        try (InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
+            JsonObject root = new Gson().fromJson(reader, JsonObject.class);
+            JsonArray messages = root.getAsJsonArray("messages");
+            if (messages == null) {
+                throw new IllegalStateException(
+                        "message_registry.json 格式错误: 缺少 'messages' 数组");
+            }
+
+            clear();
+            for (JsonElement elem : messages) {
+                JsonObject msg = elem.getAsJsonObject();
+                int id = (int) msg.get("id").getAsLong();
+                String name = msg.get("name").getAsString();
+                String service = msg.has("service") && !msg.get("service").isJsonNull()
+                        ? msg.get("service").getAsString() : null;
+                register(name, id, service);
+            }
+            logger.info("从 {} 加载消息路由表完成，共 {} 条", resourcePath, size());
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "加载消息注册表失败: " + resourcePath, e);
+        }
+    }
 
     /** 注册一条路由（重复 msgId 会覆盖）。 */
     public static void register(String name, int msgId, String targetService) {
