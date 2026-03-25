@@ -10,10 +10,10 @@ public class WrappedMessage {
     private MessageHeader header;
     private MessageBody body;
 
-    /** 构造空头与空 JSON 体，便于出站前逐字段填充 */
+    /** 预置空头与空 body，便于出站前逐字段填充。 */
     public WrappedMessage() {
         this.header = new MessageHeader();
-        this.body = new JsonMessageBody();
+        this.body = new RawMessageBody();
     }
 
     /**
@@ -50,14 +50,9 @@ public class WrappedMessage {
         this.body = body;
     }
 
-    /**
-     * 便于日志输出；体通过 {@link MessageBody#toJson()} 展开。
-     */
     @Override
     public String toString() {
-        return "WrappedMessage{" +
-                "header=" + header +
-                ", body=" + (body != null ? body.toJson() : "null") +
-                '}';
+        return "WrappedMessage{header=" + header +
+                ", bodyLen=" + (body != null ? body.toBytes().length : 0) + '}';
     }
 }

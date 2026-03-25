@@ -1,8 +1,7 @@
 package com.clawai.gatedemo.client.protocol.codec;
 
-import com.clawai.gatedemo.client.protocol.model.JsonMessageBody;
-import com.clawai.gatedemo.client.protocol.model.MessageBody;
 import com.clawai.gatedemo.client.protocol.model.MessageHeader;
+import com.clawai.gatedemo.client.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.client.protocol.model.WrappedMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -14,8 +13,7 @@ import java.util.List;
 import java.util.zip.Inflater;
 
 /**
- * Netty 侧二进制帧解码，与网关解码规则对齐：定长头、可选解压、体反序列化为 {@link JsonMessageBody}，
- * 供 TCP/WebSocket 二进制管道与 gate 对拍。
+ * Netty 侧二进制帧解码，与网关解码规则对齐：定长头 + 可选解压 + 原始二进制体（protobuf bytes）。
  */
 public class ClientMessageDecoder extends ByteToMessageDecoder {
 
@@ -69,8 +67,7 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
             }
         }
 
-        MessageBody body = new JsonMessageBody();
-        body.fromBytes(bodyBytes);
+        RawMessageBody body = new RawMessageBody(bodyBytes);
 
         WrappedMessage message = new WrappedMessage(header, body);
 

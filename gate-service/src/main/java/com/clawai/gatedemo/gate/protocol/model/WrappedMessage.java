@@ -18,7 +18,7 @@ package com.clawai.gatedemo.gate.protocol.model;
  * │  messageId (2)│ bodyLength (4)        │
  * │  requestId (4)│                        │
  * ├─────────────────┴───────────────────────┤
- * │           body (JSON二进制)             │
+ * │        body (protobuf 二进制)           │
  * └─────────────────────────────────────────┘
  *
  * 使用场景：
@@ -44,17 +44,13 @@ public class WrappedMessage {
      */
     private MessageHeader header;
 
-    /**
-     * 消息体
-     * 包含实际业务数据
-     * 可变长度，使用JSON序列化
-     */
+    /** 消息体：可变长度，protobuf 二进制负载。 */
     private MessageBody body;
 
-    /** 预置空 {@link MessageHeader} 与 {@link JsonMessageBody}，便于解码填充。 */
+    /** 预置空头与空 body，便于出站前逐字段填充。 */
     public WrappedMessage() {
         this.header = new MessageHeader();
-        this.body = new JsonMessageBody();
+        this.body = new RawMessageBody();
     }
 
     public WrappedMessage(MessageHeader header, MessageBody body) {
@@ -86,9 +82,7 @@ public class WrappedMessage {
 
     @Override
     public String toString() {
-        return "WrappedMessage{" +
-                "header=" + header +
-                ", body=" + (body != null ? body.toJson() : "null") +
-                '}';
+        return "WrappedMessage{header=" + header +
+                ", bodyLen=" + (body != null ? body.toBytes().length : 0) + '}';
     }
 }

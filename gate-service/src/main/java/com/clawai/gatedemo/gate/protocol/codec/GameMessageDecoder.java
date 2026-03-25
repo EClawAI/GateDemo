@@ -1,8 +1,7 @@
 package com.clawai.gatedemo.gate.protocol.codec;
 
-import com.clawai.gatedemo.gate.protocol.model.JsonMessageBody;
-import com.clawai.gatedemo.gate.protocol.model.MessageBody;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
+import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
@@ -39,7 +38,7 @@ import java.util.zip.Inflater;
  * - 超过限制直接关闭连接，防止攻击
  *
  * 二进制协议格式（与Encoder对应）：
- * |  2字节  |  2字节  |  2字节  |   4字节   |   4字节   |   N字节    |
+ * |  2字节  |  2字节  |  4字节  |   4字节   |   4字节   |   N字节    |
  * |  flags  | sequence | messageId | bodyLength | requestId | bodyBytes  |
  *
  * 设计考量：
@@ -62,7 +61,7 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
     private static final int MAX_BODY_LENGTH = 10 * 1024 * 1024;
 
     /**
-     * 按 14 字节头 + 定长体拆包；半包则复位读指针待下次；非法 {@code bodyLength} 会关闭连接。
+     * 按 16 字节头 + 定长体拆包；半包则复位读指针待下次；非法 {@code bodyLength} 会关闭连接。
      *
      * @param ctx Netty 上下文
      * @param in  可读字节缓冲
@@ -128,10 +127,8 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
             }
         }
 
-        // 步骤9: 反序列化消息体
-        // 使用JsonMessageBody将字节数组转换为Map
-        MessageBody body = new JsonMessageBody();
-        body.fromBytes(bodyBytes);
+        // 步骤9: 封装为原始二进制体（protobuf bytes，gate 不解析直接转发）
+        RawMessageBody body = new RawMessageBody(bodyBytes);
 
         // 步骤10: 组装完整消息
         WrappedMessage message = new WrappedMessage(header, body);
