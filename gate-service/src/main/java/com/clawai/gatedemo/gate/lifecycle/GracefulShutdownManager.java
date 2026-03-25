@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.gate.lifecycle;
 
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
@@ -25,7 +26,7 @@ public class GracefulShutdownManager {
 
     private static final Logger logger = LoggerFactory.getLogger(GracefulShutdownManager.class);
 
-    private static final int MSG_ID_SHUTDOWN = 0x0001;
+    private static final int MSG_ID_SHUTDOWN = MessageRouteRegistry.getIdByName("ServerShutdownNotice");
 
     private final NettyWebSocketServer nettyWebSocketServer;
     private final PlayerService playerService;

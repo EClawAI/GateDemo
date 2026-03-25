@@ -47,9 +47,9 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
     private static final AttributeKey<Boolean> AUTHENTICATED = AttributeKey.valueOf("authenticated");
     private static final AttributeKey<Boolean> CONNECTION_ACQUIRED = AttributeKey.valueOf("connectionAcquired");
 
-    private static final int MSG_ID_AUTH = 0x1001;
-    private static final int MSG_ID_HEARTBEAT = 0x2001;
-    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
+    private static final int MSG_ID_AUTH = MessageRouteRegistry.getIdByName("AuthRequest");
+    private static final int MSG_ID_HEARTBEAT = MessageRouteRegistry.getIdByName("ClientHeartbeat");
+    private static final int MSG_ID_HEARTBEAT_ACK = MessageRouteRegistry.getIdByName("HeartbeatAck");
 
     private final PlayerService playerService;
     private final TokenValidator tokenValidator;
@@ -97,14 +97,16 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
 
         int messageId = message.getHeader().getMessageId();
 
+        MessageHeader reqHeader = message.getHeader();
+
         String validationError = messageValidator.validate(message);
         if (validationError != null) {
-            sendError(ctx, messageId, "INVALID_MESSAGE", validationError);
+            sendError(ctx, reqHeader, messageId, "INVALID_MESSAGE", validationError);
             return;
         }
 
         if (!globalRateLimiter.tryAcquire("global")) {
-            sendError(ctx, messageId, "RATE_LIMITED", "Server rate limit exceeded");
+            sendError(ctx, reqHeader, messageId, "RATE_LIMITED", "Server rate limit exceeded");
             return;
         }
 
@@ -126,7 +128,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
             Long rateLimitPlayerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
             String key = rateLimitPlayerId != null ? String.valueOf(rateLimitPlayerId) : ctx.channel().id().asShortText();
             if (!perPlayerRateLimiter.tryAcquire(key)) {
-                sendError(ctx, messageId, "RATE_LIMITED", "Too many requests");
+                sendError(ctx, reqHeader, messageId, "RATE_LIMITED", "Too many requests");
                 return;
             }
         }
@@ -135,24 +137,26 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         String targetService = MessageRouteRegistry.getTargetService(messageId);
 
         if ("gate".equals(targetService)) {
-            handleGateMessage(ctx, messageId, message);
+            handleGateMessage(ctx, messageId, reqHeader, message);
         } else if (targetService != null) {
-            handleServiceForward(ctx, messageId, targetService, message);
+            handleServiceForward(ctx, messageId, reqHeader, targetService, message);
         } else {
             logger.warn("未注册的 messageId={} from {}",
                     messageId, ctx.channel().remoteAddress());
         }
     }
 
-    private void handleGateMessage(ChannelHandlerContext ctx, int messageId, WrappedMessage message) {
+    private void handleGateMessage(ChannelHandlerContext ctx, int messageId,
+                                    MessageHeader reqHeader, WrappedMessage message) {
         if (messageId == MSG_ID_HEARTBEAT) {
-            handleHeartbeat(ctx, message);
+            handleHeartbeat(ctx, reqHeader, message);
         } else {
             logger.warn("Gate 本地不支持处理 messageId={}", messageId);
         }
     }
 
     private void handleServiceForward(ChannelHandlerContext ctx, int messageId,
+                                       MessageHeader reqHeader,
                                        String targetService, WrappedMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId == null) {
@@ -161,14 +165,14 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         }
 
         if (!grpcCircuitBreaker.allowRequest()) {
-            sendError(ctx, messageId, "SERVICE_UNAVAILABLE", targetService + " service temporarily unavailable");
+            sendError(ctx, reqHeader, messageId, "SERVICE_UNAVAILABLE", targetService + " service temporarily unavailable");
             return;
         }
 
         ServiceRouter router = routerManager.getRouter(targetService);
         if (router == null) {
             logger.error("未找到服务路由器: service={}", targetService);
-            sendError(ctx, messageId, "SERVICE_UNAVAILABLE", "No router for service: " + targetService);
+            sendError(ctx, reqHeader, messageId, "SERVICE_UNAVAILABLE", "No router for service: " + targetService);
             return;
         }
 
@@ -177,12 +181,13 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
             grpcCircuitBreaker.recordSuccess();
         } catch (Exception e) {
             grpcCircuitBreaker.recordFailure();
-            sendError(ctx, messageId, "SERVICE_UNAVAILABLE", "Failed to forward to " + targetService);
+            sendError(ctx, reqHeader, messageId, "SERVICE_UNAVAILABLE", "Failed to forward to " + targetService);
             logger.error("消息转发失败: service={}, error={}", targetService, e.getMessage());
         }
     }
 
     private void handleAuth(ChannelHandlerContext ctx, WrappedMessage message) {
+        MessageHeader reqHeader = message.getHeader();
         try {
             byte[] bodyBytes = message.getBody() != null ? message.getBody().toBytes() : new byte[0];
             AuthRequest authReq = AuthRequest.parseFrom(bodyBytes);
@@ -195,7 +200,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
                 logger.warn("认证失败：无效 token from {}", ctx.channel().remoteAddress());
                 AuthResponse resp = AuthResponse.newBuilder()
                         .setSuccess(false).setMessage("Invalid token").build();
-                sendResponse(ctx, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+                sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
                 ctx.close();
                 return;
             }
@@ -219,7 +224,7 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
 
             AuthResponse resp = AuthResponse.newBuilder()
                     .setSuccess(true).setPlayerId(playerId).setMessage("OK").build();
-            sendResponse(ctx, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+            sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
 
         } catch (Exception e) {
             logger.error("认证消息解析失败: {}", e.getMessage());
@@ -227,14 +232,15 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         }
     }
 
-    private void handleHeartbeat(ChannelHandlerContext ctx, WrappedMessage message) {
+    private void handleHeartbeat(ChannelHandlerContext ctx, MessageHeader reqHeader,
+                                  WrappedMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId != null) {
             playerService.renewHeartbeat(playerId);
 
             HeartbeatAck ack = HeartbeatAck.newBuilder()
                     .setServerTime(System.currentTimeMillis()).build();
-            sendResponse(ctx, MSG_ID_HEARTBEAT_ACK, MessageHeader.MODE_RESPONSE, ack.toByteArray());
+            sendResponse(ctx, reqHeader, MSG_ID_HEARTBEAT_ACK, MessageHeader.MODE_RESPONSE, ack.toByteArray());
 
             logger.debug("玩家 {} 心跳续期", playerId);
         }
@@ -273,18 +279,24 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         ctx.close();
     }
 
-    /** 发送带 protobuf body 的响应消息。 */
-    private void sendResponse(ChannelHandlerContext ctx, int messageId, short mode, byte[] body) {
+    /** 发送带 protobuf body 的响应消息，回传请求的 sequence 和 requestId 供客户端匹配。 */
+    private void sendResponse(ChannelHandlerContext ctx, MessageHeader reqHeader,
+                              int messageId, short mode, byte[] body) {
         WrappedMessage reply = new WrappedMessage();
         reply.getHeader().setMessageId(messageId);
         reply.getHeader().setMode(mode);
+        if (reqHeader != null) {
+            reply.getHeader().setSequence(reqHeader.getSequence());
+            reply.getHeader().setRequestId(reqHeader.getRequestId());
+        }
         reply.setBody(new RawMessageBody(body));
         ctx.writeAndFlush(reply);
     }
 
     /** 发送 ErrorResponse 消息。 */
-    private void sendError(ChannelHandlerContext ctx, int messageId, String code, String message) {
+    private void sendError(ChannelHandlerContext ctx, MessageHeader reqHeader,
+                           int messageId, String code, String message) {
         ErrorResponse err = ErrorResponse.newBuilder().setCode(code).setMessage(message).build();
-        sendResponse(ctx, messageId, MessageHeader.MODE_RESPONSE, err.toByteArray());
+        sendResponse(ctx, reqHeader, messageId, MessageHeader.MODE_RESPONSE, err.toByteArray());
     }
 }

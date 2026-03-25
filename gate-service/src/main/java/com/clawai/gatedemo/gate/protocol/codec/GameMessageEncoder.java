@@ -64,30 +64,23 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
             return;
         }
 
-        // 步骤1: 提取消息头和消息体
         MessageHeader header = msg.getHeader();
-        // 将消息体序列化为字节数组
         byte[] bodyBytes = msg.getBody() != null ? msg.getBody().toBytes() : new byte[0];
 
-        // 步骤2: 判断是否需要压缩
-        // 压缩条件：消息头标记为压缩 且 消息体大于阈值
-        boolean needCompress = header.isCompressed() && bodyBytes.length > COMPRESS_THRESHOLD;
+        // 编码器自主决定压缩：body 超过阈值则尝试，压缩后更小才采用
+        boolean compressed = false;
         byte[] finalBodyBytes = bodyBytes;
 
-        // 步骤3: 执行压缩（如果需要）
-        if (needCompress) {
-            finalBodyBytes = compress(bodyBytes);
-            // 如果压缩失败或压缩后更大，则不压缩
-            if (finalBodyBytes == null || finalBodyBytes.length >= bodyBytes.length) {
-                finalBodyBytes = bodyBytes;
-                needCompress = false;
+        if (bodyBytes.length > COMPRESS_THRESHOLD) {
+            byte[] result = compress(bodyBytes);
+            if (result != null && result.length < bodyBytes.length) {
+                finalBodyBytes = result;
+                compressed = true;
             }
         }
 
-        // 步骤4: 更新消息头中的压缩标志和长度
-        // 注意：必须在写入前更新，因为bodyLength需要反映实际传输的长度
         header.setBodyLength(finalBodyBytes.length);
-        header.setCompressed(needCompress);
+        header.setCompressed(compressed);
 
         // 步骤5: 写入消息头（固定14字节）
         // 写入顺序必须与解码器一致
@@ -104,7 +97,7 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
 
         // 调试日志：记录编码结果
         logger.debug("Encoded message: msgId={}, bodyLength={}, compressed={}",
-                header.getMessageId(), header.getBodyLength(), needCompress);
+                header.getMessageId(), header.getBodyLength(), compressed);
     }
 
     /**

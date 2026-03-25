@@ -20,7 +20,7 @@ public class OfflineMessageService {
     private static final Logger logger = LoggerFactory.getLogger(OfflineMessageService.class);
 
     private static final int THRESHOLD = 200;
-    private static final int MSG_ID_RELOGIN = 0x1003;
+    private static final int MSG_ID_RELOGIN = MessageRouteRegistry.getIdByName("ErrorResponse");
 
     private final MessageQueueProducer producer;
     private final PlayerService playerService;

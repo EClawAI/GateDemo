@@ -34,19 +34,19 @@ public class WebSocketBinaryEncoder extends MessageToMessageEncoder<WrappedMessa
         MessageHeader header = msg.getHeader();
         byte[] bodyBytes = msg.getBody() != null ? msg.getBody().toBytes() : new byte[0];
 
-        boolean needCompress = header.isCompressed() && bodyBytes.length > COMPRESS_THRESHOLD;
+        boolean compressed = false;
         byte[] finalBodyBytes = bodyBytes;
 
-        if (needCompress) {
-            finalBodyBytes = compress(bodyBytes);
-            if (finalBodyBytes == null || finalBodyBytes.length >= bodyBytes.length) {
-                finalBodyBytes = bodyBytes;
-                needCompress = false;
+        if (bodyBytes.length > COMPRESS_THRESHOLD) {
+            byte[] result = compress(bodyBytes);
+            if (result != null && result.length < bodyBytes.length) {
+                finalBodyBytes = result;
+                compressed = true;
             }
         }
 
         header.setBodyLength(finalBodyBytes.length);
-        header.setCompressed(needCompress);
+        header.setCompressed(compressed);
 
         ByteBuf buf = ctx.alloc().buffer(16 + finalBodyBytes.length);
         buf.writeShort(header.getFlags());
@@ -61,7 +61,7 @@ public class WebSocketBinaryEncoder extends MessageToMessageEncoder<WrappedMessa
 
         out.add(new BinaryWebSocketFrame(buf));
         logger.debug("WS 编码: msgId={}, bodyLen={}, compressed={}",
-                header.getMessageId(), header.getBodyLength(), needCompress);
+                header.getMessageId(), header.getBodyLength(), compressed);
     }
 
     private byte[] compress(byte[] data) {
