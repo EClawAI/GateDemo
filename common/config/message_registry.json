@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-03-25T10:15:29.533547+00:00",
+  "generated_at": "2026-03-25T10:45:10.587134+00:00",
   "hash_algorithm": "CRC32",
   "messages": [
     {
@@ -15,34 +15,6 @@
       "service": "game",
       "direction": "upstream",
       "file": "game_messages.proto"
-    },
-    {
-      "id": 2073742463,
-      "name": "GameMessage",
-      "service": null,
-      "direction": "downstream",
-      "file": "game_service.proto"
-    },
-    {
-      "id": 1052126215,
-      "name": "GameResponse",
-      "service": null,
-      "direction": "downstream",
-      "file": "game_service.proto"
-    },
-    {
-      "id": 426461102,
-      "name": "HeartbeatRequest",
-      "service": null,
-      "direction": "downstream",
-      "file": "game_service.proto"
-    },
-    {
-      "id": 1871181577,
-      "name": "HeartbeatResponse",
-      "service": null,
-      "direction": "downstream",
-      "file": "game_service.proto"
     },
     {
       "id": 2871425461,

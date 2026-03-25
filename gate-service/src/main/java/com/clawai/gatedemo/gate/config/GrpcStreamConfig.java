@@ -1,6 +1,5 @@
 package com.clawai.gatedemo.gate.config;
 
-import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
@@ -32,24 +31,22 @@ public class GrpcStreamConfig {
     public void init() {
         pool.setStreamMessageHandler(message -> {
             long playerId = message.getPlayerId();
-            String msgType = message.getMsgType();
+            int msgId = message.getMsgId();
             byte[] bodyBytes = message.getBody().toByteArray();
 
-            int messageId = MessageRouteRegistry.getIdByName(msgType);
-
             WrappedMessage wm = new WrappedMessage();
-            wm.getHeader().setMessageId(messageId);
+            wm.getHeader().setMessageId(msgId);
             wm.getHeader().setMode(MessageHeader.MODE_PUSH);
             wm.setBody(new RawMessageBody(bodyBytes));
 
             if (playerId > 0) {
                 playerService.sendToPlayer(playerId, wm);
-                logger.debug("下行消息发送给玩家: playerId={}, msgType={}", playerId, msgType);
+                logger.debug("下行消息发送给玩家: playerId={}, msgId={}", playerId, msgId);
             } else {
                 for (Long pid : playerService.getAllOnlinePlayerIds()) {
                     playerService.sendToPlayer(pid, wm);
                 }
-                logger.debug("广播消息发送给 {} 个玩家: msgType={}", playerService.getOnlineCount(), msgType);
+                logger.debug("广播消息发送给 {} 个玩家: msgId={}", playerService.getOnlineCount(), msgId);
             }
         });
     }

@@ -254,8 +254,8 @@ public class GameGrpcClientPool {
             @Override
             public void onNext(GameMessage message) {
                 // 收到Game服务端推送的消息
-                logger.debug("📥 收到Game Stream消息：gameId={}, playerId={}, msgType={}", 
-                    message.getGameId(), message.getPlayerId(), message.getMsgType());
+                logger.debug("收到 Game Stream 消息: gameId={}, playerId={}, msgId={}", 
+                    message.getGameId(), message.getPlayerId(), message.getMsgId());
                 
                 // 回调处理
                 if (streamMessageHandler != null) {
@@ -318,12 +318,12 @@ public class GameGrpcClientPool {
      *
      * @param gameId   路由目标
      * @param playerId 玩家 ID
-     * @param msgType  业务消息类型字符串
+     * @param msgId    消息 ID（CRC32 哈希）
      * @param seq      客户端序列号
      * @param body     原始 protobuf 二进制体，直接写入 GameMessage.body
      * @return 发送成功为 true；连接缺失等为 false
      */
-    public boolean sendGameMessageViaStream(int gameId, Long playerId, String msgType, int seq, byte[] body) {
+    public boolean sendGameMessageViaStream(int gameId, Long playerId, int msgId, int seq, byte[] body) {
         GrpcConnection conn = getConnection(gameId);
         
         if (conn == null) {
@@ -332,8 +332,8 @@ public class GameGrpcClientPool {
         }
         
         if (!conn.streamConnected || conn.gameStreamSender == null) {
-            logger.warn("Game {} Stream未连接，尝试使用阻塞式调用", gameId);
-            return sendGameMessage(gameId, playerId, msgType, seq, body);
+            logger.warn("Game {} Stream 未连接，尝试阻塞式调用", gameId);
+            return sendGameMessage(gameId, playerId, msgId, seq, body);
         }
         
         try {
@@ -341,7 +341,7 @@ public class GameGrpcClientPool {
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
                 .setGameId(gameId)
-                .setMsgType(msgType != null ? msgType : "unknown")
+                .setMsgId(msgId)
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
                 .setBody(ByteString.copyFrom(body != null ? body : new byte[0]))
@@ -349,11 +349,11 @@ public class GameGrpcClientPool {
             
             conn.gameStreamSender.onNext(message);
             
-            logger.debug("Stream消息发送成功：gameId={}, playerId={}", gameId, playerId);
+            logger.debug("Stream 消息发送成功: gameId={}, playerId={}, msgId={}", gameId, playerId, msgId);
             return true;
             
         } catch (Exception e) {
-            logger.error("Stream消息发送失败：gameId={}, {}", gameId, e.getMessage());
+            logger.error("Stream 消息发送失败: gameId={}, {}", gameId, e.getMessage());
             return false;
         }
     }
@@ -363,12 +363,12 @@ public class GameGrpcClientPool {
      *
      * @param gameId   路由目标
      * @param playerId 玩家 ID
-     * @param msgType  业务类型
+     * @param msgId    消息 ID（CRC32 哈希）
      * @param seq      序号
      * @param body     原始 protobuf 二进制体
      * @return Game 返回 code==0 为 true；RPC 异常或非 0 为 false
      */
-    public boolean sendGameMessage(int gameId, Long playerId, String msgType, int seq, byte[] body) {
+    public boolean sendGameMessage(int gameId, Long playerId, int msgId, int seq, byte[] body) {
         GrpcConnection conn = getConnection(gameId);
         
         if (conn == null) {
@@ -381,7 +381,7 @@ public class GameGrpcClientPool {
                 .setGateId(gateConfig.getId())
                 .setPlayerId(playerId)
                 .setGameId(gameId)
-                .setMsgType(msgType != null ? msgType : "unknown")
+                .setMsgId(msgId)
                 .setSeq(seq)
                 .setTimestamp(System.currentTimeMillis())
                 .setBody(ByteString.copyFrom(body != null ? body : new byte[0]))
@@ -390,18 +390,18 @@ public class GameGrpcClientPool {
             GameResponse response = conn.blockingStub.sendGameMessage(message);
             
             if (response.getCode() == 0) {
-                logger.debug("gRPC 消息发送成功：gameId={}, playerId={}", gameId, playerId);
+                logger.debug("gRPC 消息发送成功: gameId={}, playerId={}, msgId={}", gameId, playerId, msgId);
                 return true;
             } else {
-                logger.warn("gRPC 消息发送失败：code={}, message={}", response.getCode(), response.getMessage());
+                logger.warn("gRPC 消息发送失败: code={}, message={}", response.getCode(), response.getMessage());
                 return false;
             }
             
         } catch (StatusRuntimeException e) {
-            logger.error("gRPC 调用异常：gameId={}, {} - {}", gameId, e.getStatus(), e.getMessage());
+            logger.error("gRPC 调用异常: gameId={}, {} - {}", gameId, e.getStatus(), e.getMessage());
             return false;
         } catch (Exception e) {
-            logger.error("发送游戏消息失败：gameId={}, {}", gameId, e.getMessage());
+            logger.error("发送游戏消息失败: gameId={}, {}", gameId, e.getMessage());
             return false;
         }
     }

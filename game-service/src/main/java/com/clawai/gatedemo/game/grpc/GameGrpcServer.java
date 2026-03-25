@@ -1,9 +1,8 @@
 package com.clawai.gatedemo.game.grpc;
 
-import com.clawai.gatedemo.game.service.GameMessageHandler;
-import com.clawai.gatedemo.game.service.OutgoingMessageSink;
+import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.handler.GameMessageSender;
 import com.clawai.gatedemo.grpc.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.stub.StreamObserver;
@@ -51,16 +50,10 @@ public class GameGrpcServer {
     private io.grpc.Server server;
     /** gRPC 标准健康检查服务所用状态管理器。 */
     private HealthStatusManager healthManager;
-    private final GameMessageHandler gameMessageHandler;
-    private final ObjectMapper objectMapper;
+    private final GameMessageDispatcher dispatcher;
 
-    /**
-     * @param gameMessageHandler 处理 Unary/流式游戏消息
-     * @param objectMapper       下行 body 序列化
-     */
-    public GameGrpcServer(GameMessageHandler gameMessageHandler, ObjectMapper objectMapper) {
-        this.gameMessageHandler = gameMessageHandler;
-        this.objectMapper = objectMapper;
+    public GameGrpcServer(GameMessageDispatcher dispatcher) {
+        this.dispatcher = dispatcher;
     }
 
     /**
@@ -134,33 +127,29 @@ public class GameGrpcServer {
         @Override
         public void sendGameMessage(GameMessage request, StreamObserver<GameResponse> responseObserver) {
             try {
-                logger.debug("📥 收到游戏消息：gateId={}, playerId={}, gameId={}, msgType={}",
-                    request.getGateId(), request.getPlayerId(), request.getGameId(), request.getMsgType());
+                logger.debug("收到 Unary 消息: gateId={}, playerId={}, gameId={}, msgId={}",
+                    request.getGateId(), request.getPlayerId(), request.getGameId(), request.getMsgId());
 
-                // 1. 处理游戏消息
-                gameMessageHandler.handleGameMessage(
+                dispatcher.dispatch(
                     request.getPlayerId(),
                     request.getGameId(),
-                    request.getMsgType(),
+                    request.getMsgId(),
                     request.getSeq(),
-                    request.getBody()
+                    request.getBody().toByteArray()
                 );
 
-                // 2. 构建成功响应
                 GameResponse response = GameResponse.newBuilder()
                     .setCode(0)
                     .setMessage("Success")
                     .setTimestamp(System.currentTimeMillis())
                     .build();
 
-                // 3. 发送响应
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
 
             } catch (Exception e) {
-                logger.error("❌ 处理游戏消息失败：{}", e.getMessage());
+                logger.error("处理 Unary 消息失败: {}", e.getMessage());
 
-                // 构建错误响应
                 GameResponse response = GameResponse.newBuilder()
                     .setCode(1)
                     .setMessage(e.getMessage())
@@ -184,41 +173,26 @@ public class GameGrpcServer {
         public StreamObserver<GameMessage> streamCommunication(StreamObserver<GameMessage> responseObserver) {
             logger.info("📡 Game Stream双向流通信已建立");
 
+            GameMessageSender sender = new GameMessageSender(
+                    responseObserver, "game-" + gameId, gameId);
+            dispatcher.setSender(sender);
+
             return new StreamObserver<GameMessage>() {
                 @Override
                 public void onNext(GameMessage request) {
-                    logger.debug("📥 收到Stream消息：gateId={}, playerId={}, msgType={}",
-                        request.getGateId(), request.getPlayerId(), request.getMsgType());
+                    logger.debug("收到 Stream 消息: gateId={}, playerId={}, msgId={}",
+                        request.getGateId(), request.getPlayerId(), request.getMsgId());
 
                     try {
-                        OutgoingMessageSink sink = (playerId, gameId, msgType, seq, body) -> {
-                            try {
-                                com.google.protobuf.ByteString bodyBytes = com.google.protobuf.ByteString
-                                    .copyFromUtf8(objectMapper.writeValueAsString(body));
-                                GameMessage out = GameMessage.newBuilder()
-                                    .setGateId(request.getGateId())
-                                    .setPlayerId(playerId)
-                                    .setGameId(gameId)
-                                    .setMsgType(msgType)
-                                    .setSeq(seq)
-                                    .setTimestamp(System.currentTimeMillis())
-                                    .setBody(bodyBytes)
-                                    .build();
-                                responseObserver.onNext(out);
-                            } catch (Exception ex) {
-                                logger.error("❌ 发送流出消息失败：{}", ex.getMessage());
-                            }
-                        };
-                        gameMessageHandler.handleGameMessage(
+                        dispatcher.dispatch(
                             request.getPlayerId(),
                             request.getGameId(),
-                            request.getMsgType(),
+                            request.getMsgId(),
                             request.getSeq(),
-                            request.getBody(),
-                            sink
+                            request.getBody().toByteArray()
                         );
                     } catch (Exception e) {
-                        logger.error("❌ 处理Stream消息失败：{}", e.getMessage());
+                        logger.error("处理 Stream 消息失败: {}", e.getMessage());
                     }
                 }
 

@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 PROTO_DIR = os.path.join(os.path.dirname(__file__), '..', 'proto')
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), '..', 'common', 'config', 'message_registry.json')
 
+EXCLUDE_FILES = {'game_service.proto'}
+
 MESSAGE_BLOCK_RE = re.compile(
     r'^message\s+(\w+)\s*\{(.*?)\n\}',
     re.MULTILINE | re.DOTALL
@@ -96,7 +98,8 @@ def main():
         sys.exit(1)
 
     proto_files = sorted([
-        f for f in os.listdir(proto_dir) if f.endswith('.proto')
+        f for f in os.listdir(proto_dir)
+        if f.endswith('.proto') and f not in EXCLUDE_FILES
     ])
 
     if not proto_files:

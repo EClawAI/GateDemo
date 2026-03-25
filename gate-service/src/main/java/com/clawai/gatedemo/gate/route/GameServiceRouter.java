@@ -1,6 +1,5 @@
 package com.clawai.gatedemo.gate.route;
 
-import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import io.netty.channel.ChannelHandlerContext;
@@ -39,16 +38,14 @@ public class GameServiceRouter implements ServiceRouter {
         }
 
         int messageId = message.getHeader().getMessageId();
-        MessageRouteRegistry.RouteInfo route = MessageRouteRegistry.getByMsgId(messageId);
-        String msgType = route != null ? route.name() : "unknown";
         byte[] rawBody = message.getBody() != null ? message.getBody().toBytes() : new byte[0];
         int seq = message.getHeader().getSequence();
 
-        boolean success = pool.sendGameMessageViaStream(gameId, playerId, msgType, seq, rawBody);
+        boolean success = pool.sendGameMessageViaStream(gameId, playerId, messageId, seq, rawBody);
         if (success) {
-            logger.debug("消息已转发到 Game: gameId={}, playerId={}, msgType={}", gameId, playerId, msgType);
+            logger.debug("消息已转发到 Game: gameId={}, playerId={}, msgId={}", gameId, playerId, messageId);
         } else {
-            logger.error("消息转发失败: gameId={}, playerId={}, msgType={}", gameId, playerId, msgType);
+            logger.error("消息转发失败: gameId={}, playerId={}, msgId={}", gameId, playerId, messageId);
         }
     }
 }

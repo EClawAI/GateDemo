@@ -54,18 +54,17 @@ class GameGrpcClientPoolTest {
             .setGateId("gate-01")
             .setPlayerId(12345L)
             .setGameId(1001)
-            .setMsgType("battle.move")
+            .setMsgId(12345)
             .setSeq(1)
             .setTimestamp(System.currentTimeMillis())
             .setBody(com.google.protobuf.ByteString.copyFromUtf8(bodyJson))
             .build();
 
-        // 验证
         assertNotNull(message);
         assertEquals("gate-01", message.getGateId());
         assertEquals(12345L, message.getPlayerId());
         assertEquals(1001, message.getGameId());
-        assertEquals("battle.move", message.getMsgType());
+        assertEquals(12345, message.getMsgId());
         
         // 验证二进制转换
         String decodedBody = message.getBody().toStringUtf8();
@@ -94,7 +93,7 @@ class GameGrpcClientPoolTest {
             .setGateId("gate-01")
             .setPlayerId(12345L)
             .setGameId(1001)
-            .setMsgType("heartbeat")
+            .setMsgId(0)
             .setSeq(0)
             .setTimestamp(System.currentTimeMillis())
             .build();

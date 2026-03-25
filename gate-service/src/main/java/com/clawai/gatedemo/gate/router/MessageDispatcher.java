@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.gate.router;
 
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import io.netty.channel.ChannelHandlerContext;
@@ -34,8 +35,8 @@ public class MessageDispatcher {
     }
 
     private void registerDefaultHandlers() {
-        register(0x1001, new AuthHandler());
-        register(0x2001, new HeartbeatHandler());
+        register(MessageRouteRegistry.getIdByName("AuthRequest"), new AuthHandler());
+        register(MessageRouteRegistry.getIdByName("ClientHeartbeat"), new HeartbeatHandler());
     }
 
     /**
