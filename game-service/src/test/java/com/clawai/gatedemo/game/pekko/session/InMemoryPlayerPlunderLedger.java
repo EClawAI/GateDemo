@@ -17,7 +17,7 @@ public final class InMemoryPlayerPlunderLedger implements PlayerPlunderLedger {
             return new PlunderDuplicate(battleId, prior);
         }
         if (requestedPlunder <= 0) {
-            return new PlunderRejected(battleId, "requestedPlunder must be positive");
+            return new PlunderRejected(battleId, "requestedPlunder 必须为正数");
         }
         long actual = Math.min(requestedPlunder, walletGold);
         walletGold -= actual;

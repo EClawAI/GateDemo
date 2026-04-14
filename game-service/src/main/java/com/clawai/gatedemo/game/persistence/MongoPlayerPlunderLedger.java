@@ -27,7 +27,7 @@ public class MongoPlayerPlunderLedger implements PlayerPlunderLedger {
     @Override
     public PlunderSettleResponse trySettle(long playerId, long battleId, long requestedPlunder) {
         if (requestedPlunder <= 0) {
-            return new PlunderRejected(battleId, "requestedPlunder must be positive");
+            return new PlunderRejected(battleId, "requestedPlunder 必须为正数");
         }
         PlayerData p = playerDataManager.load(playerId);
         synchronized (p) {

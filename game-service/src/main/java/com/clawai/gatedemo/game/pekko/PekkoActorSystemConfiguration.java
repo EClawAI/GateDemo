@@ -15,14 +15,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Embeds a single Pekko Typed {@link ActorSystem} named {@code game} with
- * {@link SpawnProtocol} as guardian so application code can spawn children (e.g. stream ingress).
+ * 嵌入名为 {@code game} 的单个 Pekko Typed {@link ActorSystem}，守护 Actor 为 {@link SpawnProtocol}，
+ * 供业务通过 Ask 等方式 spawn 子 Actor（如流入口）。
  * <p>
- * Shutdown: {@link #destroy()} runs on Spring context close and calls {@link ActorSystem#terminate()}
- * then awaits completion (with timeout). {@link com.clawai.gatedemo.game.GameServiceApplication}
- * also registers a JVM {@link Runtime#addShutdownHook shutdown hook} that only releases its
- * {@link java.util.concurrent.CountDownLatch}; orderly Pekko shutdown is primarily driven by Spring
- * {@code DisposableBean} when the context is stopped (e.g. SIGTERM handled by Spring Boot).
+ * 关闭：Spring 容器关闭时执行 {@link #destroy()}，调用 {@link ActorSystem#terminate()} 并等待结束（带超时）。
+ * {@link com.clawai.gatedemo.game.GameServiceApplication} 另注册 JVM {@link Runtime#addShutdownHook shutdown hook}
+ * 仅释放 {@link java.util.concurrent.CountDownLatch}；Pekko 有序停机主要由 Spring {@code DisposableBean}
+ * 在上下文停止时触发（如 Spring Boot 处理 SIGTERM）。
  */
 @Configuration
 public class PekkoActorSystemConfiguration implements DisposableBean {

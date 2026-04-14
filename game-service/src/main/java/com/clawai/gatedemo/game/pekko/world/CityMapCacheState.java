@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-city map cache placeholder; mutated only from {@link CityBehavior} mailbox.
+ * 单城地图缓存占位；仅允许在 {@link CityBehavior} 邮箱线程内修改。
  */
 public final class CityMapCacheState {
 

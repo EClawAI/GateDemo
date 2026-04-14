@@ -8,9 +8,9 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 
 /**
- * One Typed actor per online {@code playerId} (see {@link PlayerSessionRegistryBehavior}).
- * Invokes {@link GameMessageDispatcher#dispatch} on the actor thread; plunder settlement delegates to
- * {@link PlayerPlunderLedger}（生产为 Mongo，测试可用内存实现）。
+ * 每个在线 {@code playerId} 对应一个 Typed Actor（见 {@link PlayerSessionRegistryBehavior}）。
+ * 在 Actor 线程上调用 {@link GameMessageDispatcher#dispatch}；掠夺结算委托给
+ * {@link PlayerPlunderLedger}（生产环境为 Mongo，测试可用内存实现）。
  */
 public final class PlayerSessionBehavior {
 
@@ -21,8 +21,7 @@ public final class PlayerSessionBehavior {
     public record ProcessInbound(int messageId, int seq, byte[] body) implements Command {}
 
     /**
-     * Map/City asks victim player to commit plunder for a battle; idempotent by {@code battleId}
-     * (see {@link PlunderDuplicate}).
+     * 地图/City 请求受害玩家就某场战斗提交掠夺；按 {@code battleId} 幂等（见 {@link PlunderDuplicate}）。
      */
     public record SettlePlunder(long battleId, long requestedPlunder, ActorRef<PlunderSettleResponse> replyTo)
             implements Command {}

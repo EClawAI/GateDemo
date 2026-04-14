@@ -1,6 +1,6 @@
 package com.clawai.gatedemo.game.pekko.world;
 
-/** Outcome of {@link CityBehavior.SettlePlunderVictim} delivered to the original caller. */
+/** {@link CityBehavior.SettlePlunderVictim} 的结算结果，交付给原始调用方。 */
 public sealed interface PlunderSettlementResult permits PlunderSettlementResult.Ok, PlunderSettlementResult.Failed {
 
     record Ok(long battleId, long actualPlunder) implements PlunderSettlementResult {}

@@ -10,7 +10,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import java.util.HashMap;
 import java.util.Map;
 
-/** One Typed actor per regionId; lazily spawns anonymous {@link CityBehavior} children. */
+/** 每个 regionId 一个 Typed Actor；按需匿名 spawn {@link CityBehavior} 子 Actor。 */
 public final class RegionBehavior {
 
     private RegionBehavior() {}

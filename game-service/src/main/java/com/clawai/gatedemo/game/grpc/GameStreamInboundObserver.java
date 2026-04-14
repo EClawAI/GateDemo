@@ -8,13 +8,12 @@ import org.apache.pekko.actor.typed.ActorRef;
 import org.slf4j.Logger;
 
 /**
- * gRPC inbound half of {@code StreamCommunication}: {@link #onNext} only enqueues to the
- * stream ingress actor — it does not call {@link GameMessageDispatcher} on the Netty/gRPC
- * callback thread.
+ * {@code StreamCommunication} 的 gRPC 入站半侧：{@link #onNext} 仅将消息入队到流入口 Actor，
+ * 不在 Netty/gRPC 回调线程上调用 {@link GameMessageDispatcher}。
  * <p>
- * On stream end, sends {@link StreamIngressBehavior.Shutdown} and clears the dispatcher sender.
- * See {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} and
- * {@code docs/backpressure-design.md} (HTTP/2 flow control vs application mailbox).
+ * 流结束时发送 {@link StreamIngressBehavior.Shutdown} 并清理 dispatcher 的 sender。
+ * 设计见 {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} 与
+ * {@code docs/backpressure-design.md}（HTTP/2 流控与应用层邮箱）。
  */
 final class GameStreamInboundObserver implements StreamObserver<GameMessage> {
 

@@ -6,23 +6,23 @@ import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 
 /**
- * One stream ingress actor per Gate–Game {@code StreamCommunication} RPC: forwards inbound
- * frames to {@link PlayerSessionRegistryBehavior} (not on gRPC/Netty callbacks).
+ * 每个 Gate–Game {@code StreamCommunication} 双向流对应一个流入口 Actor：将上行帧转发给
+ * {@link PlayerSessionRegistryBehavior}（不在 gRPC/Netty 回调线程上执行业务）。
  * <p>
- * See {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} and
- * {@code docs/backpressure-design.md} (HTTP/2 flow control vs application mailbox).
+ * 设计见 {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} 与
+ * {@code docs/backpressure-design.md}（HTTP/2 流控与应用层邮箱）。
  */
 public final class StreamIngressBehavior {
 
     private StreamIngressBehavior() {}
 
-    /** Protocol for the stream ingress actor. */
+    /** 流入口 Actor 的消息协议。 */
     public sealed interface Command permits InboundStreamFrame, Shutdown {}
 
-    /** Inbound uplink frame mapped to {@link GameMessageDispatcher#dispatch} arguments. */
+    /** 上行帧，字段对应 {@link com.clawai.gatedemo.game.handler.GameMessageDispatcher#dispatch} 参数。 */
     public record InboundStreamFrame(long playerId, int messageId, int seq, byte[] body) implements Command {}
 
-    /** Stop this actor when the gRPC stream ends. */
+    /** gRPC 流结束时停止本 Actor。 */
     public record Shutdown() implements Command {}
 
     public static Behavior<Command> create(

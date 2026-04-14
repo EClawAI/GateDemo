@@ -19,8 +19,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
 /**
- * One Typed actor per (regionId, cityId). Single-writer for {@link CityMapCacheState}; Map→Player plunder
- * uses Ask + {@code battleId} idempotency on {@link PlayerSessionBehavior}.
+ * 每个 (regionId, cityId) 一个 Typed Actor；{@link CityMapCacheState} 单写者。
+ * 地图→Player 掠夺经 Ask，在 {@link PlayerSessionBehavior} 上按 {@code battleId} 幂等。
  */
 public final class CityBehavior {
 
@@ -34,8 +34,8 @@ public final class CityBehavior {
     public record CityPingSeq(int seq, long targetCityId, ActorRef<Integer> replyTo) implements CityMessage {}
 
     /**
-     * City (map authority) asks victim's {@link PlayerSessionBehavior} to settle plunder; async pipeline
-     * completes with {@link PlunderSettlementResult} on {@code replyTo}.
+     * 城（地图权威）向受害者的 {@link PlayerSessionBehavior} 请求掠夺结算；异步管线完成后向 {@code replyTo}
+     * 交付 {@link PlunderSettlementResult}。
      */
     public record SettlePlunderVictim(
             long targetCityId,

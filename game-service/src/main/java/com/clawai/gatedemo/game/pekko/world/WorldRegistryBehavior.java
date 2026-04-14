@@ -10,7 +10,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Top-level registry: routes to Region → City. */
+/** 顶层注册表：路由到 Region → City。 */
 public final class WorldRegistryBehavior {
 
     public sealed interface Command permits RouteToCity {}

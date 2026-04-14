@@ -13,8 +13,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Routes inbound stream frames to {@link PlayerSessionBehavior} by {@code playerId}, with
- * per-stream refcount so sessions stop when no active stream references a player.
+ * 将入站流帧按 {@code playerId} 路由到 {@link PlayerSessionBehavior}；
+ * 按流引用计数，无活跃流引用时停止对应会话。
  */
 public final class PlayerSessionRegistryBehavior {
 
@@ -25,11 +25,11 @@ public final class PlayerSessionRegistryBehavior {
 
     public record StreamClosed(long streamId) implements Command {}
 
-    /** Fired when a watched {@link PlayerSessionBehavior} stops; {@code ref} avoids clearing a replacement session. */
+    /** 被 watch 的 {@link PlayerSessionBehavior} 停止时触发；携带 {@code ref} 以免误清已替换的新会话。 */
     public record PlayerSessionTerminated(long playerId, ActorRef<PlayerSessionBehavior.Command> ref)
             implements Command {}
 
-    /** Resolve current session actor for cross-Actor Ask (e.g. City → Player plunder settlement). */
+    /** 解析当前在线会话 Actor，供跨 Actor Ask（如 City → Player 掠夺结算）。 */
     public record GetPlayerSession(long playerId, ActorRef<Optional<ActorRef<PlayerSessionBehavior.Command>>> replyTo)
             implements Command {}
 
@@ -41,9 +41,9 @@ public final class PlayerSessionRegistryBehavior {
     private final GameMessageDispatcher dispatcher;
     private final PlayerPlunderLedger plunderLedger;
     private final Map<Long, ActorRef<PlayerSessionBehavior.Command>> sessions = new HashMap<>();
-    /** streamId -> playerIds that have received at least one frame on this stream */
+    /** streamId → 该流上至少收到过一帧的 playerId 集合 */
     private final Map<Long, Set<Long>> streamToPlayers = new HashMap<>();
-    /** playerId -> number of distinct streams currently referencing this player */
+    /** playerId → 当前引用该玩家的不同流数量 */
     private final Map<Long, Integer> playerRefCount = new HashMap<>();
 
     private PlayerSessionRegistryBehavior(
@@ -80,7 +80,7 @@ public final class PlayerSessionRegistryBehavior {
 
     private void spawnSession(long playerId) {
         Behavior<PlayerSessionBehavior.Command> b = PlayerSessionBehavior.create(dispatcher, playerId, plunderLedger);
-        // Anonymous avoids InvalidActorNameException when respawning after stop (name reservation during termination).
+        // 匿名 spawn，避免 stop 后立刻重建时因名称占用触发 InvalidActorNameException。
         ActorRef<PlayerSessionBehavior.Command> ref = context.spawnAnonymous(b);
         sessions.put(playerId, ref);
         context.watchWith(ref, new PlayerSessionTerminated(playerId, ref));
@@ -110,16 +110,16 @@ public final class PlayerSessionRegistryBehavior {
         }
     }
 
-    /**
-     * Child stopped or crashed: remove from all streams and refcount so the next inbound frame
-     * can re-spawn cleanly.
-     */
+    /** 响应 GetPlayerSession：返回当前 playerId 对应的在线会话（无则 EMPTY）。 */
     private Behavior<Command> onGetPlayerSession(GetPlayerSession g) {
         ActorRef<PlayerSessionBehavior.Command> ref = sessions.get(g.playerId());
         g.replyTo().tell(Optional.ofNullable(ref));
         return Behaviors.same();
     }
 
+    /**
+     * 子 Actor 停止或崩溃：从会话表与所有流的占用中移除该玩家，使后续入站帧可重新 spawn。
+     */
     private Behavior<Command> onPlayerSessionTerminated(PlayerSessionTerminated t) {
         ActorRef<PlayerSessionBehavior.Command> cur = sessions.get(t.playerId());
         if (cur == null || !cur.equals(t.ref())) {

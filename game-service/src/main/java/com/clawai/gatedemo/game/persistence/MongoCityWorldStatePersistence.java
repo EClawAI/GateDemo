@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/** {@link CityWorldStatePersistence} 的 Mongo 实现，集合 {@code city_world_state}。 */
 @Component
 public class MongoCityWorldStatePersistence implements CityWorldStatePersistence {
 

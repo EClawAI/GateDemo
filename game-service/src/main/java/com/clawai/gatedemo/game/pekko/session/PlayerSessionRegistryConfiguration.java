@@ -12,6 +12,10 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Duration;
 import java.util.concurrent.CompletionStage;
 
+/**
+ * 将 {@link PlayerSessionRegistryBehavior} 注册为 Bean，经 {@link org.apache.pekko.actor.typed.SpawnProtocol}
+ * 在 {@code game} ActorSystem 中以固定名称 spawn。
+ */
 @Configuration
 public class PlayerSessionRegistryConfiguration {
 

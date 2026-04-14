@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * 双向流上行：{@link StreamIngressBehavior} 将帧路由至 {@link PlayerSessionRegistryBehavior}（见
  * {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} 与阶段 3 PlayerSession）。
- * Unary {@code SendGameMessage} 仍同步分发，后续可与流统一桥接（TODO）。
+ * Unary {@code SendGameMessage} 仍为同步分发，后续可选与流统一走流入口 Actor（TODO）。
  */
 @Component
 public class GameGrpcServer {
@@ -152,7 +152,7 @@ public class GameGrpcServer {
             try {
                 logger.debug("收到 Unary 消息: gateId={}, playerId={}, msgId={}",
                     request.getGateId(), request.getPlayerId(), request.getMsgId());
-                // TODO: optional future change — route Unary through the same stream-ingress actor pattern.
+                // TODO：可选后续变更 — Unary 也经流入口 Actor 与双向流统一路由。
 
                 dispatcher.dispatch(
                     request.getPlayerId(),
