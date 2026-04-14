@@ -2,7 +2,7 @@
 
 ## Context
 
-- 仓库为 **Maven 多模块**，父 POM 使用 **Spring Boot 3.2.x**，`game-service` 已使用 **gRPC Java** 与 **`grpc-netty-shaded`**（Netty 位于 **relocate 后的包**），与路线图 [阶段 0](../../../docs/pekko-game-actor-openspec-roadmap.md) 一致。
+- 仓库为 **Maven 多模块**，父 POM 使用 **Spring Boot 3.2.x**，`game-service` 已使用 **gRPC Java** 与 **`grpc-netty-shaded`**（Netty 位于 **relocate 后的包**），与路线图 [阶段 0](../../../../docs/pekko-game-actor-openspec-roadmap.md) 一致。
 - 目标是在 **不实现 ActorSystem** 的前提下，完成 **JDK + Pekko BOM + 模块顺序** 的决策冻结，供后续 `integrate-pekko-actor-system-in-game-service` 等变更引用。
 
 ## Goals / Non-Goals

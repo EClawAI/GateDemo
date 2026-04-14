@@ -2,7 +2,7 @@
 
 ## Why
 
-在 game 服务引入 Apache Pekko Typed Actor 之前，需要先在仓库层面**冻结 JDK、Pekko 版本线与 BOM 管理方式**，否则后续 OpenSpec 变更会出现依赖版本漂移、与 gRPC/Netty 并存假设不一致等问题。本变更对应路线图 [`docs/pekko-game-actor-openspec-roadmap.md`](../../../docs/pekko-game-actor-openspec-roadmap.md) **阶段 0**。
+在 game 服务引入 Apache Pekko Typed Actor 之前，需要先在仓库层面**冻结 JDK、Pekko 版本线与 BOM 管理方式**，否则后续 OpenSpec 变更会出现依赖版本漂移、与 gRPC/Netty 并存假设不一致等问题。本变更对应路线图 [`docs/pekko-game-actor-openspec-roadmap.md`](../../../../docs/pekko-game-actor-openspec-roadmap.md) **阶段 0**。
 
 ## What Changes
 
@@ -27,5 +27,5 @@
 
 - **构建**：父 POM `pom.xml`（`java.version`、可选 `maven-compiler-plugin` 显式版本）、`dependencyManagement` 增加 Pekko BOM。
 - **模块**：首版实现可**仅**触及父 POM；`game-service` 在实现阶段可不新增 Pekko 依赖直至 `integrate-pekko-actor-system-in-game-service`。
-- **文档**：路线图阶段 0 与 [`docs/actor_study.md`](../../../docs/actor_study.md) 可交叉引用本 change。
+- **文档**：路线图阶段 0 与 [`docs/actor_study.md`](../../../../docs/actor_study.md) 可交叉引用本 change。
 - **系统**：运行时行为不变，直至后续 change 实际引入 Pekko 依赖与代码。
