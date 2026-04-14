@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.game.pekko.world;
 
+import com.clawai.gatedemo.game.persistence.CityWorldStatePersistence;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
@@ -18,13 +19,14 @@ public class WorldRegistryConfiguration {
     @Bean
     public ActorRef<WorldRegistryBehavior.Command> worldRegistry(
             ActorSystem<SpawnProtocol.Command> gameActorSystem,
-            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry) {
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            CityWorldStatePersistence cityWorldStatePersistence) {
         CompletionStage<ActorRef<WorldRegistryBehavior.Command>> started =
                 AskPattern.ask(
                         gameActorSystem,
                         replyTo ->
                                 new SpawnProtocol.Spawn<>(
-                                        WorldRegistryBehavior.create(playerSessionRegistry),
+                                        WorldRegistryBehavior.create(playerSessionRegistry, cityWorldStatePersistence),
                                         "world-registry",
                                         Props.empty(),
                                         replyTo),

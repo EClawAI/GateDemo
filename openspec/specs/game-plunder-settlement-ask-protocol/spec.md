@@ -11,7 +11,7 @@
 `PlayerSessionBehavior` SHALL 处理 **`SettlePlunder(battleId, requestedPlunder, replyTo)`**：
 
 - **若** `battleId` **已**存在已提交记录：SHALL **回复** **`PlunderDuplicate`**，**actual** 与 **首次**提交一致，**且** **不得**再次扣减钱包。
-- **若** `battleId` **未**存在：SHALL 计算 **`actual = min(requestedPlunder, wallet)`**（钱包为占位实现），扣减钱包，记录 **`battleId → actual`**，并 **回复** **`PlunderOk`**。
+- **若** `battleId` **未**存在：SHALL 计算 **`actual = min(requestedPlunder, wallet)`**，扣减钱包，记录 **`battleId → actual`**，并 **回复** **`PlunderOk`**（生产钱包与幂等记录 **以** Mongo **`player_data`** **为准**，见 **`game-actor-persistence-and-cache-write-order`**；单测可用内存账本）。
 - **若** `requestedPlunder <= 0`：SHALL **回复** **`PlunderRejected`**。
 
 #### Scenario: 重复 battleId 不双扣

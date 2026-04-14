@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.game.pekko.world;
 
+import com.clawai.gatedemo.game.persistence.CityWorldStatePersistence;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -16,18 +17,24 @@ public final class WorldRegistryBehavior {
 
     public record RouteToCity(long regionId, long cityId, CityBehavior.CityMessage cityMessage) implements Command {}
 
-    public static Behavior<Command> create(ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry) {
-        return Behaviors.setup(ctx -> new WorldRegistryBehavior(ctx, playerSessionRegistry).running());
+    public static Behavior<Command> create(
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            CityWorldStatePersistence cityWorldStateOrNull) {
+        return Behaviors.setup(ctx -> new WorldRegistryBehavior(ctx, playerSessionRegistry, cityWorldStateOrNull).running());
     }
 
     private final ActorContext<Command> ctx;
     private final ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry;
+    private final CityWorldStatePersistence cityWorldStateOrNull;
     private final Map<Long, ActorRef<RegionBehavior.Command>> regions = new HashMap<>();
 
     private WorldRegistryBehavior(
-            ActorContext<Command> ctx, ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry) {
+            ActorContext<Command> ctx,
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            CityWorldStatePersistence cityWorldStateOrNull) {
         this.ctx = ctx;
         this.playerSessionRegistry = playerSessionRegistry;
+        this.cityWorldStateOrNull = cityWorldStateOrNull;
     }
 
     private Behavior<Command> running() {
@@ -38,7 +45,7 @@ public final class WorldRegistryBehavior {
         ActorRef<RegionBehavior.Command> region =
                 regions.computeIfAbsent(
                         r.regionId(),
-                        rid -> ctx.spawnAnonymous(RegionBehavior.create(rid, playerSessionRegistry)));
+                        rid -> ctx.spawnAnonymous(RegionBehavior.create(rid, playerSessionRegistry, cityWorldStateOrNull)));
         region.tell(new RegionBehavior.ForwardToCity(r.cityId(), r.cityMessage()));
         return Behaviors.same();
     }

@@ -2,6 +2,7 @@ package com.clawai.gatedemo.game.pekko.world;
 
 import com.clawai.gatedemo.core.message.MessageHandlerRegistry;
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.pekko.session.InMemoryPlayerPlunderLedger;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
@@ -27,9 +28,9 @@ class PlunderSettlementIntegrationTest {
     void settlePlunder_thenDuplicateBattleId_returnsSameActual() {
         GameMessageDispatcher dispatcher = new GameMessageDispatcher(new MessageHandlerRegistry(), null);
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg-plunder");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher, new InMemoryPlayerPlunderLedger()), "reg-plunder");
         ActorRef<WorldRegistryBehavior.Command> world =
-                testKit.spawn(WorldRegistryBehavior.create(registry), "world-plunder");
+                testKit.spawn(WorldRegistryBehavior.create(registry, null), "world-plunder");
 
         long victim = 99L;
         long streamId = 1L;
@@ -64,9 +65,9 @@ class PlunderSettlementIntegrationTest {
     void settlePlunder_victimOffline_fails() {
         GameMessageDispatcher dispatcher = new GameMessageDispatcher(new MessageHandlerRegistry(), null);
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg-offline");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher, new InMemoryPlayerPlunderLedger()), "reg-offline");
         ActorRef<WorldRegistryBehavior.Command> world =
-                testKit.spawn(WorldRegistryBehavior.create(registry), "world-offline");
+                testKit.spawn(WorldRegistryBehavior.create(registry, null), "world-offline");
 
         TestProbe<PlunderSettlementResult> result = testKit.createTestProbe();
         world.tell(

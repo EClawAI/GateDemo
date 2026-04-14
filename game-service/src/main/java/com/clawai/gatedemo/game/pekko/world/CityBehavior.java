@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.game.pekko.world;
 
+import com.clawai.gatedemo.game.persistence.CityWorldStatePersistence;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionBehavior;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import com.clawai.gatedemo.game.pekko.session.PlunderDuplicate;
@@ -13,6 +14,7 @@ import org.apache.pekko.actor.typed.javadsl.AskPattern;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 
@@ -49,7 +51,7 @@ public final class CityBehavior {
     record GotPlunder(SettlePlunderVictim original, PlunderSettleResponse response, Throwable err) implements CityMessage {}
 
     public static Behavior<CityMessage> create(long regionId, long cityId) {
-        return create(regionId, cityId, null, null);
+        return create(regionId, cityId, null, null, null);
     }
 
     public static Behavior<CityMessage> create(
@@ -57,15 +59,42 @@ public final class CityBehavior {
             long cityId,
             ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
             Runnable onAcceptedOrNull) {
+        return create(regionId, cityId, playerSessionRegistry, onAcceptedOrNull, null);
+    }
+
+    public static Behavior<CityMessage> create(
+            long regionId,
+            long cityId,
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            Runnable onAcceptedOrNull,
+            CityWorldStatePersistence cityWorldStateOrNull) {
         return Behaviors.setup(
                 ctx -> {
                     CityMapCacheState cache = new CityMapCacheState();
+                    if (cityWorldStateOrNull != null) {
+                        Map<String, Integer> loaded = cityWorldStateOrNull.loadSnapshot(regionId, cityId);
+                        for (var e : loaded.entrySet()) {
+                            cache.putTile(e.getKey(), e.getValue());
+                        }
+                    }
                     return Behaviors.receive(CityMessage.class)
-                            .onMessage(CityEnvelope.class, e -> handleEnvelope(ctx, regionId, cityId, cache, e, onAcceptedOrNull))
+                            .onMessage(
+                                    CityEnvelope.class,
+                                    e ->
+                                            handleEnvelope(
+                                                    ctx,
+                                                    regionId,
+                                                    cityId,
+                                                    cache,
+                                                    e,
+                                                    onAcceptedOrNull,
+                                                    cityWorldStateOrNull))
                             .onMessage(CityPingSeq.class, p -> handlePing(ctx, cityId, p, onAcceptedOrNull))
                             .onMessage(SettlePlunderVictim.class, s -> startPlunder(ctx, regionId, cityId, playerSessionRegistry, s))
                             .onMessage(GotSession.class, g -> onGotSession(ctx, cityId, playerSessionRegistry, g))
-                            .onMessage(GotPlunder.class, g -> onGotPlunder(ctx, cityId, cache, g))
+                            .onMessage(
+                                    GotPlunder.class,
+                                    g -> onGotPlunder(ctx, regionId, cityId, cache, g, cityWorldStateOrNull))
                             .build();
                 });
     }
@@ -76,7 +105,8 @@ public final class CityBehavior {
             long cityId,
             CityMapCacheState cache,
             CityEnvelope e,
-            Runnable onAcceptedOrNull) {
+            Runnable onAcceptedOrNull,
+            CityWorldStatePersistence cityWorldStateOrNull) {
         if (e.targetCityId() != cityId) {
             ctx.getLog()
                     .warn(
@@ -90,7 +120,24 @@ public final class CityBehavior {
             onAcceptedOrNull.run();
         }
         cache.putTile("lastAttacker", (int) (e.attackerPlayerId() % Integer.MAX_VALUE));
+        persistIfNeeded(ctx, regionId, cityId, cache, cityWorldStateOrNull);
         return Behaviors.same();
+    }
+
+    private static void persistIfNeeded(
+            ActorContext<CityMessage> ctx,
+            long regionId,
+            long cityId,
+            CityMapCacheState cache,
+            CityWorldStatePersistence persistence) {
+        if (persistence == null) {
+            return;
+        }
+        try {
+            persistence.saveSnapshot(regionId, cityId, cache.snapshot());
+        } catch (Exception e) {
+            ctx.getLog().error("City world state save failed: regionId={} cityId={}", regionId, cityId, e);
+        }
     }
 
     private static Behavior<CityMessage> handlePing(
@@ -171,7 +218,12 @@ public final class CityBehavior {
     }
 
     private static Behavior<CityMessage> onGotPlunder(
-            ActorContext<CityMessage> ctx, long cityId, CityMapCacheState cache, GotPlunder g) {
+            ActorContext<CityMessage> ctx,
+            long regionId,
+            long cityId,
+            CityMapCacheState cache,
+            GotPlunder g,
+            CityWorldStatePersistence cityWorldStateOrNull) {
         SettlePlunderVictim s = g.original();
         if (g.err() != null) {
             ctx.getLog().warn("SettlePlunder ask failed: cityId={} battleId={}", cityId, s.battleId(), g.err());
@@ -182,10 +234,12 @@ public final class CityBehavior {
         switch (r) {
             case PlunderOk ok -> {
                 cache.putTile("battle-" + ok.battleId(), (int) Math.min(ok.actualAmount(), Integer.MAX_VALUE));
+                persistIfNeeded(ctx, regionId, cityId, cache, cityWorldStateOrNull);
                 s.replyTo().tell(new PlunderSettlementResult.Ok(ok.battleId(), ok.actualAmount()));
             }
             case PlunderDuplicate dup -> {
                 cache.putTile("battle-" + dup.battleId(), (int) Math.min(dup.actualAmount(), Integer.MAX_VALUE));
+                persistIfNeeded(ctx, regionId, cityId, cache, cityWorldStateOrNull);
                 s.replyTo().tell(new PlunderSettlementResult.Ok(dup.battleId(), dup.actualAmount()));
             }
             case PlunderRejected rej -> s.replyTo().tell(new PlunderSettlementResult.Failed(rej.reason()));

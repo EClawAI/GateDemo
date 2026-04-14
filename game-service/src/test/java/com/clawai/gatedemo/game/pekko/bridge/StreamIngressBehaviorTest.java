@@ -2,6 +2,7 @@ package com.clawai.gatedemo.game.pekko.bridge;
 
 import com.clawai.gatedemo.core.message.MessageHandlerRegistry;
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.pekko.session.InMemoryPlayerPlunderLedger;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.typed.ActorRef;
@@ -37,7 +38,7 @@ class StreamIngressBehaviorTest {
         };
 
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(recording), "registry");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(recording, new InMemoryPlayerPlunderLedger()), "registry");
         var ref = testKit.spawn(StreamIngressBehavior.create(1L, registry), "ingress");
 
         ref.tell(new StreamIngressBehavior.InboundStreamFrame(1L, 2, 3, new byte[] {1}));

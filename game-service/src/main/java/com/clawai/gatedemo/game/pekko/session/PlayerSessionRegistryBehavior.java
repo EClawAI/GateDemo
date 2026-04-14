@@ -33,21 +33,24 @@ public final class PlayerSessionRegistryBehavior {
     public record GetPlayerSession(long playerId, ActorRef<Optional<ActorRef<PlayerSessionBehavior.Command>>> replyTo)
             implements Command {}
 
-    public static Behavior<Command> create(GameMessageDispatcher dispatcher) {
-        return Behaviors.setup(ctx -> new PlayerSessionRegistryBehavior(ctx, dispatcher).running());
+    public static Behavior<Command> create(GameMessageDispatcher dispatcher, PlayerPlunderLedger plunderLedger) {
+        return Behaviors.setup(ctx -> new PlayerSessionRegistryBehavior(ctx, dispatcher, plunderLedger).running());
     }
 
     private final ActorContext<Command> context;
     private final GameMessageDispatcher dispatcher;
+    private final PlayerPlunderLedger plunderLedger;
     private final Map<Long, ActorRef<PlayerSessionBehavior.Command>> sessions = new HashMap<>();
     /** streamId -> playerIds that have received at least one frame on this stream */
     private final Map<Long, Set<Long>> streamToPlayers = new HashMap<>();
     /** playerId -> number of distinct streams currently referencing this player */
     private final Map<Long, Integer> playerRefCount = new HashMap<>();
 
-    private PlayerSessionRegistryBehavior(ActorContext<Command> context, GameMessageDispatcher dispatcher) {
+    private PlayerSessionRegistryBehavior(
+            ActorContext<Command> context, GameMessageDispatcher dispatcher, PlayerPlunderLedger plunderLedger) {
         this.context = context;
         this.dispatcher = dispatcher;
+        this.plunderLedger = plunderLedger;
     }
 
     private Behavior<Command> running() {
@@ -76,7 +79,7 @@ public final class PlayerSessionRegistryBehavior {
     }
 
     private void spawnSession(long playerId) {
-        Behavior<PlayerSessionBehavior.Command> b = PlayerSessionBehavior.create(dispatcher, playerId);
+        Behavior<PlayerSessionBehavior.Command> b = PlayerSessionBehavior.create(dispatcher, playerId, plunderLedger);
         // Anonymous avoids InvalidActorNameException when respawning after stop (name reservation during termination).
         ActorRef<PlayerSessionBehavior.Command> ref = context.spawnAnonymous(b);
         sessions.put(playerId, ref);

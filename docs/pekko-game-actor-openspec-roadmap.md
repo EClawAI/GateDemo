@@ -118,7 +118,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `game-actor-persistence-and-cache-write-order` | `design.md`：写序、崩溃恢复、Outbox/事件表（可选）；Player vs City 持久化边界。 |
+| [`game-actor-persistence-and-cache-write-order`](../openspec/changes/archive/2026-04-14-game-actor-persistence-and-cache-write-order/proposal.md)（能力：[`openspec/specs/game-actor-persistence-and-cache-write-order/spec.md`](../openspec/specs/game-actor-persistence-and-cache-write-order/spec.md)） | `design.md`：写序、崩溃恢复、Outbox/事件表（可选）；Player vs City 持久化边界。 |
 
 **验收**：进程 kill 后重启，城态与钱包可与验收用例对齐。
 

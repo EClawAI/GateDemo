@@ -49,7 +49,7 @@ class PlayerSessionRegistryBehaviorTest {
                 };
 
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher, new InMemoryPlayerPlunderLedger()), "reg");
 
         registry.tell(new PlayerSessionRegistryBehavior.RouteInbound(10L, 99L, 1, 1, new byte[0]));
         registry.tell(new PlayerSessionRegistryBehavior.RouteInbound(10L, 99L, 1, 2, new byte[0]));
@@ -74,7 +74,7 @@ class PlayerSessionRegistryBehaviorTest {
                 };
 
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg2");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher, new InMemoryPlayerPlunderLedger()), "reg2");
 
         registry.tell(new PlayerSessionRegistryBehavior.RouteInbound(1L, 5L, 1, 1, new byte[0]));
         registry.tell(new PlayerSessionRegistryBehavior.RouteInbound(2L, 5L, 1, 1, new byte[0]));

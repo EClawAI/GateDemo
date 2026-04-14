@@ -17,13 +17,15 @@ public class PlayerSessionRegistryConfiguration {
 
     @Bean
     public ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry(
-            ActorSystem<SpawnProtocol.Command> gameActorSystem, GameMessageDispatcher dispatcher) {
+            ActorSystem<SpawnProtocol.Command> gameActorSystem,
+            GameMessageDispatcher dispatcher,
+            PlayerPlunderLedger playerPlunderLedger) {
         CompletionStage<ActorRef<PlayerSessionRegistryBehavior.Command>> started =
                 AskPattern.ask(
                         gameActorSystem,
                         replyTo ->
                                 new SpawnProtocol.Spawn<>(
-                                        PlayerSessionRegistryBehavior.create(dispatcher),
+                                        PlayerSessionRegistryBehavior.create(dispatcher, playerPlunderLedger),
                                         "player-session-registry",
                                         Props.empty(),
                                         replyTo),

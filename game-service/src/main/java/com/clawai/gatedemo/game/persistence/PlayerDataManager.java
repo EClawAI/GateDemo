@@ -9,6 +9,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -49,6 +50,7 @@ public class PlayerDataManager extends AbstractDataManager<Long, PlayerData> {
                 new ItemData(2001, 5),
                 new ItemData(3001, 1)
         ));
+        player.setPlunderSettlements(new ArrayList<>());
 
         logger.info("Generated default player data: playerId={}, nickname={}", playerId, player.getNickname());
         return player;

@@ -7,12 +7,10 @@ import org.apache.pekko.actor.typed.SupervisorStrategy;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * One Typed actor per online {@code playerId} (see {@link PlayerSessionRegistryBehavior}).
- * Invokes {@link GameMessageDispatcher#dispatch} on the actor thread; wallet/plunder settlement is
- * in-memory for demo (see phase 6 for persistence boundaries).
+ * Invokes {@link GameMessageDispatcher#dispatch} on the actor thread; plunder settlement delegates to
+ * {@link PlayerPlunderLedger}（生产为 Mongo，测试可用内存实现）。
  */
 public final class PlayerSessionBehavior {
 
@@ -29,23 +27,14 @@ public final class PlayerSessionBehavior {
     public record SettlePlunder(long battleId, long requestedPlunder, ActorRef<PlunderSettleResponse> replyTo)
             implements Command {}
 
-    private static final class WalletState {
-        /** battleId -> committed actual plunder (idempotency). */
-        final ConcurrentHashMap<Long, Long> battleToActual = new ConcurrentHashMap<>();
-        /** Demo wallet; not yet wired to PlayerData Mongo. */
-        long walletGold = 10_000L;
-    }
-
-    public static Behavior<Command> create(GameMessageDispatcher dispatcher, long playerId) {
+    public static Behavior<Command> create(GameMessageDispatcher dispatcher, long playerId, PlayerPlunderLedger ledger) {
         Behavior<Command> inner =
                 Behaviors.setup(
-                        ctx -> {
-                            WalletState state = new WalletState();
-                            return Behaviors.receive(Command.class)
-                                    .onMessage(ProcessInbound.class, m -> onInbound(ctx, dispatcher, playerId, m))
-                                    .onMessage(SettlePlunder.class, s -> onSettle(ctx, state, playerId, s))
-                                    .build();
-                        });
+                        ctx ->
+                                Behaviors.receive(Command.class)
+                                        .onMessage(ProcessInbound.class, m -> onInbound(ctx, dispatcher, playerId, m))
+                                        .onMessage(SettlePlunder.class, s -> onSettle(ctx, ledger, playerId, s))
+                                        .build());
         return Behaviors.supervise(inner).onFailure(SupervisorStrategy.stop());
     }
 
@@ -60,20 +49,9 @@ public final class PlayerSessionBehavior {
     }
 
     private static Behavior<Command> onSettle(
-            ActorContext<Command> ctx, WalletState state, long playerId, SettlePlunder s) {
-        Long prior = state.battleToActual.get(s.battleId());
-        if (prior != null) {
-            s.replyTo().tell(new PlunderDuplicate(s.battleId(), prior));
-            return Behaviors.same();
-        }
-        if (s.requestedPlunder() <= 0) {
-            s.replyTo().tell(new PlunderRejected(s.battleId(), "requestedPlunder must be positive"));
-            return Behaviors.same();
-        }
-        long actual = Math.min(s.requestedPlunder(), state.walletGold);
-        state.walletGold -= actual;
-        state.battleToActual.put(s.battleId(), actual);
-        s.replyTo().tell(new PlunderOk(s.battleId(), actual));
+            ActorContext<Command> ctx, PlayerPlunderLedger ledger, long playerId, SettlePlunder s) {
+        PlunderSettleResponse r = ledger.trySettle(playerId, s.battleId(), s.requestedPlunder());
+        s.replyTo().tell(r);
         return Behaviors.same();
     }
 }

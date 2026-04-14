@@ -2,6 +2,7 @@ package com.clawai.gatedemo.game.pekko.world;
 
 import com.clawai.gatedemo.core.message.MessageHandlerRegistry;
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.pekko.session.InMemoryPlayerPlunderLedger;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
@@ -23,9 +24,9 @@ class WorldRegionCityRoutingTest {
         TestProbe<Integer> probe = testKit.createTestProbe();
         GameMessageDispatcher dispatcher = new GameMessageDispatcher(new MessageHandlerRegistry(), null);
         ActorRef<PlayerSessionRegistryBehavior.Command> registry =
-                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg-world-route");
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher, new InMemoryPlayerPlunderLedger()), "reg-world-route");
         ActorRef<WorldRegistryBehavior.Command> world =
-                testKit.spawn(WorldRegistryBehavior.create(registry), "world");
+                testKit.spawn(WorldRegistryBehavior.create(registry, null), "world");
 
         long region = 7L;
         long cityId = 42L;

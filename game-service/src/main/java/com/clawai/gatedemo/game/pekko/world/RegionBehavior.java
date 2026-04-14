@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.game.pekko.world;
 
+import com.clawai.gatedemo.game.persistence.CityWorldStatePersistence;
 import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
@@ -19,11 +20,15 @@ public final class RegionBehavior {
     public record ForwardToCity(long cityId, CityBehavior.CityMessage cityMessage) implements Command {}
 
     public static Behavior<Command> create(
-            long regionId, ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry) {
+            long regionId,
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            CityWorldStatePersistence cityWorldStateOrNull) {
         return Behaviors.setup(ctx -> {
             Map<Long, ActorRef<CityBehavior.CityMessage>> cities = new HashMap<>();
             return Behaviors.receive(Command.class)
-                    .onMessage(ForwardToCity.class, f -> onForward(ctx, regionId, cities, playerSessionRegistry, f))
+                    .onMessage(
+                            ForwardToCity.class,
+                            f -> onForward(ctx, regionId, cities, playerSessionRegistry, cityWorldStateOrNull, f))
                     .build();
         });
     }
@@ -33,11 +38,14 @@ public final class RegionBehavior {
             long regionId,
             Map<Long, ActorRef<CityBehavior.CityMessage>> cities,
             ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry,
+            CityWorldStatePersistence cityWorldStateOrNull,
             ForwardToCity f) {
         ActorRef<CityBehavior.CityMessage> city =
                 cities.computeIfAbsent(
                         f.cityId(),
-                        id -> ctx.spawnAnonymous(CityBehavior.create(regionId, id, playerSessionRegistry, null)));
+                        id ->
+                                ctx.spawnAnonymous(
+                                        CityBehavior.create(regionId, id, playerSessionRegistry, null, cityWorldStateOrNull)));
         city.tell(f.cityMessage());
         return Behaviors.same();
     }

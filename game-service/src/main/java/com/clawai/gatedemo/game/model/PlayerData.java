@@ -28,6 +28,8 @@ public class PlayerData implements BaseEntity<Long> {
     private int loginCount;
     /** 背包道具列表，与 MongoDB 嵌套文档映射。 */
     private List<ItemData> items;
+    /** 掠夺结算幂等记录（嵌套文档列表）。 */
+    private List<PlunderSettlementRecord> plunderSettlements;
 
     public PlayerData() {
     }
@@ -119,5 +121,13 @@ public class PlayerData implements BaseEntity<Long> {
 
     public void setItems(List<ItemData> items) {
         this.items = items;
+    }
+
+    public List<PlunderSettlementRecord> getPlunderSettlements() {
+        return plunderSettlements;
+    }
+
+    public void setPlunderSettlements(List<PlunderSettlementRecord> plunderSettlements) {
+        this.plunderSettlements = plunderSettlements;
     }
 }
