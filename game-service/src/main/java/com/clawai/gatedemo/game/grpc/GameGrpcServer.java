@@ -3,6 +3,7 @@ package com.clawai.gatedemo.game.grpc;
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
 import com.clawai.gatedemo.game.handler.GameMessageSender;
 import com.clawai.gatedemo.game.pekko.bridge.StreamIngressBehavior;
+import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import com.clawai.gatedemo.grpc.*;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.HealthStatusManager;
@@ -32,8 +33,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * 启用 TLS 时通过 {@code grpc.tls.*} 加载证书与私钥；关闭时优雅 shutdown 并更新健康状态为 NOT_SERVING。
  * <p>
- * 双向流上行：{@link StreamIngressBehavior} 将业务从 gRPC 回调线程迁出（见
- * {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md}）。
+ * 双向流上行：{@link StreamIngressBehavior} 将帧路由至 {@link PlayerSessionRegistryBehavior}（见
+ * {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md} 与阶段 3 PlayerSession）。
  * Unary {@code SendGameMessage} 仍同步分发，后续可与流统一桥接（TODO）。
  */
 @Component
@@ -66,11 +67,16 @@ public class GameGrpcServer {
     private HealthStatusManager healthManager;
     private final GameMessageDispatcher dispatcher;
     private final ActorSystem<SpawnProtocol.Command> actorSystem;
+    private final ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry;
     private final AtomicLong streamIngressSeq = new AtomicLong();
 
-    public GameGrpcServer(GameMessageDispatcher dispatcher, ActorSystem<SpawnProtocol.Command> actorSystem) {
+    public GameGrpcServer(
+            GameMessageDispatcher dispatcher,
+            ActorSystem<SpawnProtocol.Command> actorSystem,
+            ActorRef<PlayerSessionRegistryBehavior.Command> playerSessionRegistry) {
         this.dispatcher = dispatcher;
         this.actorSystem = actorSystem;
+        this.playerSessionRegistry = playerSessionRegistry;
     }
 
     /**
@@ -194,12 +200,13 @@ public class GameGrpcServer {
                     responseObserver, "game-" + gameId);
             dispatcher.setSender(sender);
 
-            String name = "stream-ingress-" + streamIngressSeq.incrementAndGet();
+            long streamId = streamIngressSeq.incrementAndGet();
+            String name = "stream-ingress-" + streamId;
             Props props = Props.empty().withMailboxFromConfig("pekko.actor.mailbox.stream-ingress-bounded");
             CompletionStage<ActorRef<StreamIngressBehavior.Command>> started = AskPattern.ask(
                     actorSystem,
                     replyTo -> new SpawnProtocol.Spawn<>(
-                            StreamIngressBehavior.create(dispatcher),
+                            StreamIngressBehavior.create(streamId, playerSessionRegistry),
                             name,
                             props,
                             replyTo),

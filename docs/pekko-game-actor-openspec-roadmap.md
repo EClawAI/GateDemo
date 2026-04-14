@@ -81,7 +81,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `add-player-session-actor` | `design.md`：生命周期（登录创建/断线停止/重连合并策略）；邮箱与状态上限；与 **UserId** 寻址。`specs/`：会话 Actor 对外（向 World）发出的 **命令类型表**（初版可只有占位）。 |
+| [`add-player-session-actor`](../openspec/changes/archive/2026-04-14-add-player-session-actor/proposal.md)（能力：[`openspec/specs/game-player-session-actor/spec.md`](../openspec/specs/game-player-session-actor/spec.md)） | `design.md`：生命周期（登录创建/断线停止/重连合并策略）；邮箱与状态上限；与 **UserId** 寻址。`specs/`：会话 Actor 对外（向 World）发出的 **命令类型表**（初版可只有占位）。 |
 
 **验收**：connect/disconnect 无资源泄漏；父监督策略文档化。
 

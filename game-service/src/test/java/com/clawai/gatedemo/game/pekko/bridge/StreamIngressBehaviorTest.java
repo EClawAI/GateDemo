@@ -2,7 +2,9 @@ package com.clawai.gatedemo.game.pekko.bridge;
 
 import com.clawai.gatedemo.core.message.MessageHandlerRegistry;
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
+import org.apache.pekko.actor.typed.ActorRef;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +23,7 @@ class StreamIngressBehaviorTest {
     }
 
     @Test
-    void dispatchRunsOnActorThread_notOnTellCallerThread() throws Exception {
+    void dispatchRunsOnPlayerSessionActorThread_notOnTellCallerThread() throws Exception {
         Thread teller = Thread.currentThread();
         AtomicReference<Thread> dispatchThread = new AtomicReference<>();
         CountDownLatch done = new CountDownLatch(1);
@@ -34,8 +36,9 @@ class StreamIngressBehaviorTest {
             }
         };
 
-        // ActorTestKit uses default test config; production uses bounded mailbox from application.conf.
-        var ref = testKit.spawn(StreamIngressBehavior.create(recording), "ingress");
+        ActorRef<PlayerSessionRegistryBehavior.Command> registry =
+                testKit.spawn(PlayerSessionRegistryBehavior.create(recording), "registry");
+        var ref = testKit.spawn(StreamIngressBehavior.create(1L, registry), "ingress");
 
         ref.tell(new StreamIngressBehavior.InboundStreamFrame(1L, 2, 3, new byte[] {1}));
 
