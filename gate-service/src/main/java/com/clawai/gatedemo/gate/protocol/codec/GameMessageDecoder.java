@@ -21,7 +21,7 @@ import java.util.zip.Inflater;
  * - 将解析后的Java对象传递给下一个Handler
  *
  * 解码流程：
- * 1. 检查是否读到完整的消息头（14字节）
+ * 1. 检查是否读到完整的消息头（16字节）
  * 2. 读取消息头字段
  * 3. 验证消息体长度（防攻击）
  * 4. 检查是否读到完整的消息体
@@ -79,7 +79,7 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
         // 如果后续发现数据仍不完整，可以resetReaderIndex回退
         in.markReaderIndex();
 
-        // 步骤3: 读取消息头（14字节）
+        // 步骤3: 读取消息头（16字节）
         // 读取顺序必须与Encoder写入顺序完全一致
         short flags = in.readShort();      // 2字节：标志位
         short sequence = in.readShort();   // 2字节：序列号
