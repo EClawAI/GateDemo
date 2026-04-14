@@ -105,7 +105,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `add-plunder-settlement-ask-protocol` | `design.md`：消息契约（`SettlePlunder`、`PlunderCommitted`、失败/超时）；幂等与重试表；是否与 **短时 Settlement Actor**（Saga）同 change 或子任务拆分。`specs/`：**状态机**（Pending / Committed / Compensating）。 |
+| [`add-plunder-settlement-ask-protocol`](../openspec/changes/archive/2026-04-14-add-plunder-settlement-ask-protocol/proposal.md)（能力：[`openspec/specs/game-plunder-settlement-ask-protocol/spec.md`](../openspec/specs/game-plunder-settlement-ask-protocol/spec.md)） | `design.md`：消息契约（`SettlePlunder`、`PlunderCommitted`、失败/超时）；幂等与重试表；是否与 **短时 Settlement Actor**（Saga）同 change 或子任务拆分。`specs/`：**状态机**（Pending / Committed / Compensating）。 |
 | （可选）`add-battle-reserve-commit-player-wallet` | 若玩法存在 **长行军/围攻**，引入 **Reserve / Commit**；依赖 `add-plunder-settlement-ask-protocol`。 |
 
 **验收**：混沌测试：Player 超时、重复 `battleId`、并发花费资源；最终无「地图已结、钱未扣」或反向双扣。

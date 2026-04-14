@@ -9,6 +9,7 @@ import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -17,7 +18,7 @@ import java.util.Set;
  */
 public final class PlayerSessionRegistryBehavior {
 
-    public sealed interface Command permits RouteInbound, StreamClosed, PlayerSessionTerminated {}
+    public sealed interface Command permits RouteInbound, StreamClosed, PlayerSessionTerminated, GetPlayerSession {}
 
     public record RouteInbound(long streamId, long playerId, int messageId, int seq, byte[] body)
             implements Command {}
@@ -26,6 +27,10 @@ public final class PlayerSessionRegistryBehavior {
 
     /** Fired when a watched {@link PlayerSessionBehavior} stops; {@code ref} avoids clearing a replacement session. */
     public record PlayerSessionTerminated(long playerId, ActorRef<PlayerSessionBehavior.Command> ref)
+            implements Command {}
+
+    /** Resolve current session actor for cross-Actor Ask (e.g. City → Player plunder settlement). */
+    public record GetPlayerSession(long playerId, ActorRef<Optional<ActorRef<PlayerSessionBehavior.Command>>> replyTo)
             implements Command {}
 
     public static Behavior<Command> create(GameMessageDispatcher dispatcher) {
@@ -50,6 +55,7 @@ public final class PlayerSessionRegistryBehavior {
                 .onMessage(RouteInbound.class, this::onRouteInbound)
                 .onMessage(StreamClosed.class, this::onStreamClosed)
                 .onMessage(PlayerSessionTerminated.class, this::onPlayerSessionTerminated)
+                .onMessage(GetPlayerSession.class, this::onGetPlayerSession)
                 .build();
     }
 
@@ -105,6 +111,12 @@ public final class PlayerSessionRegistryBehavior {
      * Child stopped or crashed: remove from all streams and refcount so the next inbound frame
      * can re-spawn cleanly.
      */
+    private Behavior<Command> onGetPlayerSession(GetPlayerSession g) {
+        ActorRef<PlayerSessionBehavior.Command> ref = sessions.get(g.playerId());
+        g.replyTo().tell(Optional.ofNullable(ref));
+        return Behaviors.same();
+    }
+
     private Behavior<Command> onPlayerSessionTerminated(PlayerSessionTerminated t) {
         ActorRef<PlayerSessionBehavior.Command> cur = sessions.get(t.playerId());
         if (cur == null || !cur.equals(t.ref())) {

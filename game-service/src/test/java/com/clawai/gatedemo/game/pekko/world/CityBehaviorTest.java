@@ -22,7 +22,7 @@ class CityBehaviorTest {
     @Test
     void sameCity_serialPing_repliesInOrder() {
         TestProbe<Integer> probe = testKit.createTestProbe();
-        ActorRef<CityBehavior.CityCommand> city =
+        ActorRef<CityBehavior.CityMessage> city =
                 testKit.spawn(CityBehavior.create(10L, 100L), "city");
 
         city.tell(new CityBehavior.CityPingSeq(1, 100L, probe.ref()));
@@ -37,8 +37,8 @@ class CityBehaviorTest {
     @Test
     void wrongTargetCityId_doesNotRunAcceptedHook() throws Exception {
         AtomicInteger accepted = new AtomicInteger();
-        ActorRef<CityBehavior.CityCommand> city =
-                testKit.spawn(CityBehavior.create(10L, 100L, accepted::incrementAndGet), "city2");
+        ActorRef<CityBehavior.CityMessage> city =
+                testKit.spawn(CityBehavior.create(10L, 100L, null, accepted::incrementAndGet), "city2");
 
         city.tell(new CityBehavior.CityEnvelope(200L, 1L, "atk"));
         assertThat(accepted.get()).isZero();

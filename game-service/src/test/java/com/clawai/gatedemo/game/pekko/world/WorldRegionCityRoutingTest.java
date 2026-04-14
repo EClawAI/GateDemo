@@ -1,5 +1,8 @@
 package com.clawai.gatedemo.game.pekko.world;
 
+import com.clawai.gatedemo.core.message.MessageHandlerRegistry;
+import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
+import com.clawai.gatedemo.game.pekko.session.PlayerSessionRegistryBehavior;
 import org.apache.pekko.actor.testkit.typed.javadsl.ActorTestKit;
 import org.apache.pekko.actor.testkit.typed.javadsl.TestProbe;
 import org.apache.pekko.actor.typed.ActorRef;
@@ -18,8 +21,11 @@ class WorldRegionCityRoutingTest {
     @Test
     void worldRegistry_routesSameCity_serialOrder() {
         TestProbe<Integer> probe = testKit.createTestProbe();
+        GameMessageDispatcher dispatcher = new GameMessageDispatcher(new MessageHandlerRegistry(), null);
+        ActorRef<PlayerSessionRegistryBehavior.Command> registry =
+                testKit.spawn(PlayerSessionRegistryBehavior.create(dispatcher), "reg-world-route");
         ActorRef<WorldRegistryBehavior.Command> world =
-                testKit.spawn(WorldRegistryBehavior.create(), "world");
+                testKit.spawn(WorldRegistryBehavior.create(registry), "world");
 
         long region = 7L;
         long cityId = 42L;
