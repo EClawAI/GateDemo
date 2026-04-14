@@ -44,7 +44,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| [`pekko-game-baseline-and-bom`](../openspec/changes/pekko-game-baseline-and-bom/proposal.md) | `proposal.md`：明确 Pekko 版本线、BOM、`pekko-actor-typed`、后续可选模块（`pekko-stream`、`pekko-remote`/`cluster-*`）的**引入顺序**；与现有 **Java 版本**、构建工具对齐。`design.md`：模块边界图（Game JAR 内 ActorSystem 单例策略、与 Spring/纯 Main 二选一）。 |
+| [`pekko-game-baseline-and-bom`](../openspec/changes/archive/2026-04-14-pekko-game-baseline-and-bom/proposal.md)（能力：[`openspec/specs/pekko-game-baseline/spec.md`](../openspec/specs/pekko-game-baseline/spec.md)） | `proposal.md`：明确 Pekko 版本线、BOM、`pekko-actor-typed`、后续可选模块（`pekko-stream`、`pekko-remote`/`cluster-*`）的**引入顺序**；与现有 **Java 版本**、构建工具对齐。`design.md`：模块边界图（Game JAR 内 ActorSystem 单例策略、与 Spring/纯 Main 二选一）。 |
 
 **验收**：团队能指着一份文档说出「第一版不引入 Cluster」或「何时引入 Sharding」。
 
@@ -56,7 +56,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `integrate-pekko-actor-system-in-game-service` | `design.md`：`ActorSystem` 创建/关闭（与 JVM shutdown hook、协调停止）；配置入口（`application.conf` / HOCON）；本地测试策略。`tasks.md`：最小 Main 或 Spring `Bean` 集成 PoC。 |
+| [`integrate-pekko-actor-system-in-game-service`](../openspec/changes/integrate-pekko-actor-system-in-game-service/proposal.md) | `design.md`：`ActorSystem` 创建/关闭（与 JVM shutdown hook、协调停止）；配置入口（`application.conf` / HOCON）；本地测试策略。`tasks.md`：最小 Main 或 Spring `Bean` 集成 PoC。 |
 | `define-game-actor-message-envelope` | **跨聚合消息**（gate/game 已有 proto 之外的 **Actor 内部**）：信封结构（`correlationId` / `battleId` 预留位）、错误承载、版本号；是否与现有 core-message 框架 ID 对齐。可选：`specs/.../spec.md` 描述不变量。 |
 
 **验收**：单测或集成测试可 `spawn` 父子 Actor，`tell` 往返；无业务逻辑亦可。

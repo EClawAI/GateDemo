@@ -1,0 +1,63 @@
+package com.clawai.gatedemo.game.pekko;
+
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import org.apache.pekko.actor.typed.ActorSystem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
+/**
+ * Embeds a single Pekko Typed {@link ActorSystem} named {@code game}.
+ * <p>
+ * Shutdown: {@link #destroy()} runs on Spring context close and calls {@link ActorSystem#terminate()}
+ * then awaits completion (with timeout). {@link com.clawai.gatedemo.game.GameServiceApplication}
+ * also registers a JVM {@link Runtime#addShutdownHook shutdown hook} that only releases its
+ * {@link java.util.concurrent.CountDownLatch}; orderly Pekko shutdown is primarily driven by Spring
+ * {@code DisposableBean} when the context is stopped (e.g. SIGTERM handled by Spring Boot).
+ */
+@Configuration
+public class PekkoActorSystemConfiguration implements DisposableBean {
+
+    private static final Logger logger = LoggerFactory.getLogger(PekkoActorSystemConfiguration.class);
+
+    private static final Duration TERMINATE_TIMEOUT = Duration.ofSeconds(30);
+
+    private volatile ActorSystem<Void> gameActorSystem;
+
+    @Bean
+    public ActorSystem<Void> gameActorSystem() {
+        Config config = ConfigFactory.load();
+        ActorSystem<Void> system = ActorSystem.create(GameRootBehavior.create(), "game", config);
+        this.gameActorSystem = system;
+        return system;
+    }
+
+    @Override
+    public void destroy() {
+        ActorSystem<Void> system = gameActorSystem;
+        if (system == null) {
+            return;
+        }
+        logger.info("Terminating Pekko ActorSystem [{}]...", system.name());
+        system.terminate();
+        try {
+            system.getWhenTerminated().toCompletableFuture().get(
+                    TERMINATE_TIMEOUT.getSeconds(), java.util.concurrent.TimeUnit.SECONDS);
+            logger.info("Pekko ActorSystem [{}] terminated", system.name());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("Interrupted while waiting for ActorSystem termination", e);
+        } catch (ExecutionException e) {
+            logger.warn("ActorSystem termination completed with failure", e.getCause());
+        } catch (TimeoutException e) {
+            logger.warn("Timed out after {} waiting for ActorSystem termination", TERMINATE_TIMEOUT, e);
+        }
+    }
+}

@@ -86,10 +86,21 @@
             <artifactId>opentelemetry-exporter-zipkin</artifactId>
         </dependency>
 
+        <!-- Apache Pekko Typed (versions from pekko-bom_2.13 in parent) -->
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor-typed_2.13</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-actor-testkit-typed_2.13</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
