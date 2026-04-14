@@ -93,7 +93,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `add-world-region-and-city-actors` | `design.md`：**routing key**（`regionId` / `cityId`）；父子层级（Region → City 或扁平 Sharding 预备）；**地图缓存**数据结构归属；与 DB 的读写顺序（只描述原则，具体存储可引用 `persistence-plan.md`）。 |
+| [`add-world-region-and-city-actors`](../openspec/changes/archive/2026-04-14-add-world-region-and-city-actors/proposal.md)（能力：[`openspec/specs/game-world-region-city-actors/spec.md`](../openspec/specs/game-world-region-city-actors/spec.md)） | `design.md`：**routing key**（`regionId` / `cityId`）；父子层级（Region → City 或扁平 Sharding 预备）；**地图缓存**数据结构归属；与 DB 的读写顺序（只描述原则，具体存储可引用 `persistence-plan.md`）。 |
 
 **验收**：单测「同一 `cityId` 消息序列化执行」；攻击命令不进入错误的城邮箱。
 
