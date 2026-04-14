@@ -2,6 +2,7 @@ package com.clawai.gatedemo.game.grpc;
 
 import com.clawai.gatedemo.game.handler.GameMessageDispatcher;
 import com.clawai.gatedemo.game.handler.GameMessageSender;
+import com.clawai.gatedemo.game.pekko.bridge.StreamIngressBehavior;
 import com.clawai.gatedemo.grpc.*;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.HealthStatusManager;
@@ -13,14 +14,27 @@ import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import org.apache.pekko.actor.typed.ActorRef;
+import org.apache.pekko.actor.typed.ActorSystem;
+import org.apache.pekko.actor.typed.Props;
+import org.apache.pekko.actor.typed.SpawnProtocol;
+import org.apache.pekko.actor.typed.javadsl.AskPattern;
+
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Game 侧 gRPC 服务端：监听端口、注册 {@link GameServiceGrpc} 实现与健康检查；支持 Unary、双向流业务消息与心跳流。
  * <p>
  * 启用 TLS 时通过 {@code grpc.tls.*} 加载证书与私钥；关闭时优雅 shutdown 并更新健康状态为 NOT_SERVING。
+ * <p>
+ * 双向流上行：{@link StreamIngressBehavior} 将业务从 gRPC 回调线程迁出（见
+ * {@code openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/design.md}）。
+ * Unary {@code SendGameMessage} 仍同步分发，后续可与流统一桥接（TODO）。
  */
 @Component
 public class GameGrpcServer {
@@ -51,9 +65,12 @@ public class GameGrpcServer {
     /** gRPC 标准健康检查服务所用状态管理器。 */
     private HealthStatusManager healthManager;
     private final GameMessageDispatcher dispatcher;
+    private final ActorSystem<SpawnProtocol.Command> actorSystem;
+    private final AtomicLong streamIngressSeq = new AtomicLong();
 
-    public GameGrpcServer(GameMessageDispatcher dispatcher) {
+    public GameGrpcServer(GameMessageDispatcher dispatcher, ActorSystem<SpawnProtocol.Command> actorSystem) {
         this.dispatcher = dispatcher;
+        this.actorSystem = actorSystem;
     }
 
     /**
@@ -129,6 +146,7 @@ public class GameGrpcServer {
             try {
                 logger.debug("收到 Unary 消息: gateId={}, playerId={}, msgId={}",
                     request.getGateId(), request.getPlayerId(), request.getMsgId());
+                // TODO: optional future change — route Unary through the same stream-ingress actor pattern.
 
                 dispatcher.dispatch(
                     request.getPlayerId(),
@@ -176,36 +194,20 @@ public class GameGrpcServer {
                     responseObserver, "game-" + gameId);
             dispatcher.setSender(sender);
 
-            return new StreamObserver<GameMessage>() {
-                @Override
-                public void onNext(GameMessage request) {
-                    logger.debug("收到 Stream 消息: gateId={}, playerId={}, msgId={}",
-                        request.getGateId(), request.getPlayerId(), request.getMsgId());
+            String name = "stream-ingress-" + streamIngressSeq.incrementAndGet();
+            Props props = Props.empty().withMailboxFromConfig("pekko.actor.mailbox.stream-ingress-bounded");
+            CompletionStage<ActorRef<StreamIngressBehavior.Command>> started = AskPattern.ask(
+                    actorSystem,
+                    replyTo -> new SpawnProtocol.Spawn<>(
+                            StreamIngressBehavior.create(dispatcher),
+                            name,
+                            props,
+                            replyTo),
+                    Duration.ofSeconds(3),
+                    actorSystem.scheduler());
+            ActorRef<StreamIngressBehavior.Command> ingress = started.toCompletableFuture().join();
 
-                    try {
-                        dispatcher.dispatch(
-                            request.getPlayerId(),
-                            request.getMsgId(),
-                            request.getSeq(),
-                            request.getBody().toByteArray()
-                        );
-                    } catch (Exception e) {
-                        logger.error("处理 Stream 消息失败: {}", e.getMessage());
-                    }
-                }
-
-                @Override
-                public void onError(Throwable t) {
-                    // 客户端取消导致的错误是正常的，不打印error
-                    logger.warn("⚠️ Stream通信断开：{} (客户端可能已断开)", t.getMessage());
-                }
-
-                @Override
-                public void onCompleted() {
-                    logger.info("🔚 Gate端Stream通信完成");
-                    responseObserver.onCompleted();
-                }
-            };
+            return new GameStreamInboundObserver(ingress, responseObserver, dispatcher, logger);
         }
 
         /**

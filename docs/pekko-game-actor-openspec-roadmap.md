@@ -69,7 +69,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| `bridge-grpc-stream-to-game-actor-mailbox` | `design.md`：从 gRPC stub 到 `ActorRef` 的映射（按 `sessionId` / `playerId`）；背压（`StreamObserver` / reactive 适配与「丢弃/限流」策略二选一）；与 [`backpressure-design.md`](backpressure-design.md) 关系。`tasks.md`：最小 E2E（mock client–game）。 |
+| [`bridge-grpc-stream-to-game-actor-mailbox`](../openspec/changes/archive/2026-04-14-bridge-grpc-stream-to-game-actor-mailbox/proposal.md)（能力：[`openspec/specs/game-grpc-stream-actor-bridge/spec.md`](../openspec/specs/game-grpc-stream-actor-bridge/spec.md)） | `design.md`：从 gRPC stub 到 `ActorRef` 的映射（按 `sessionId` / `playerId`）；背压（`StreamObserver` / reactive 适配与「丢弃/限流」策略二选一）；与 [`backpressure-design.md`](backpressure-design.md) 关系。`tasks.md`：最小 E2E（mock client–game）。 |
 
 **验收**：压测脚本下 IO 线程无长时间占用；消息可达指定 Session Actor。
 

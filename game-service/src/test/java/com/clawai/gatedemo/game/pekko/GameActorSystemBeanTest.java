@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.game.pekko;
 
 import org.apache.pekko.actor.typed.ActorSystem;
+import org.apache.pekko.actor.typed.SpawnProtocol;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GameActorSystemBeanTest {
 
     @Autowired
-    private ActorSystem<Void> gameActorSystem;
+    private ActorSystem<SpawnProtocol.Command> gameActorSystem;
 
     @Test
     void exposesSingleGameActorSystemBean() {

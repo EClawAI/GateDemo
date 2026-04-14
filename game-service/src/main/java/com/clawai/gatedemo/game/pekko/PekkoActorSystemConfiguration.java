@@ -3,6 +3,7 @@ package com.clawai.gatedemo.game.pekko;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.apache.pekko.actor.typed.ActorSystem;
+import org.apache.pekko.actor.typed.SpawnProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -14,7 +15,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Embeds a single Pekko Typed {@link ActorSystem} named {@code game}.
+ * Embeds a single Pekko Typed {@link ActorSystem} named {@code game} with
+ * {@link SpawnProtocol} as guardian so application code can spawn children (e.g. stream ingress).
  * <p>
  * Shutdown: {@link #destroy()} runs on Spring context close and calls {@link ActorSystem#terminate()}
  * then awaits completion (with timeout). {@link com.clawai.gatedemo.game.GameServiceApplication}
@@ -29,19 +31,20 @@ public class PekkoActorSystemConfiguration implements DisposableBean {
 
     private static final Duration TERMINATE_TIMEOUT = Duration.ofSeconds(30);
 
-    private volatile ActorSystem<Void> gameActorSystem;
+    private volatile ActorSystem<SpawnProtocol.Command> gameActorSystem;
 
     @Bean
-    public ActorSystem<Void> gameActorSystem() {
+    public ActorSystem<SpawnProtocol.Command> gameActorSystem() {
         Config config = ConfigFactory.load();
-        ActorSystem<Void> system = ActorSystem.create(GameRootBehavior.create(), "game", config);
+        ActorSystem<SpawnProtocol.Command> system =
+                ActorSystem.create(SpawnProtocol.create(), "game", config);
         this.gameActorSystem = system;
         return system;
     }
 
     @Override
     public void destroy() {
-        ActorSystem<Void> system = gameActorSystem;
+        ActorSystem<SpawnProtocol.Command> system = gameActorSystem;
         if (system == null) {
             return;
         }
