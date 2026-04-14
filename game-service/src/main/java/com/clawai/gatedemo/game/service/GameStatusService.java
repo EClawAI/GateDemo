@@ -4,6 +4,7 @@ import com.clawai.gatedemo.game.config.GameConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -40,9 +41,10 @@ public class GameStatusService {
      * @param gameConfig       解析 gameId 等
      * @param registryService  状态变化时发布 UPDATE（可为 null 则跳过）
      */
-    public GameStatusService(RedisTemplate<String, Object> redisTemplate, 
-                           GameConfig gameConfig,
-                           GameRegistryService registryService) {
+    public GameStatusService(
+            RedisTemplate<String, Object> redisTemplate,
+            GameConfig gameConfig,
+            @Lazy GameRegistryService registryService) {
         this.redisTemplate = redisTemplate;
         this.gameConfig = gameConfig;
         this.registryService = registryService;
