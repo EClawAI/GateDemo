@@ -97,6 +97,8 @@
 
 **验收**：单测「同一 `cityId` 消息序列化执行」；攻击命令不进入错误的城邮箱。
 
+**演进（可选）**：若分服 SLG 希望 **减少 Region/City 多级 Actor、改为「每服×每玩法单沙盘 Actor + 联盟 Actor + 玩家聚合 + 无状态 Worker」**，见立项 [`game-slg-aggregate-actors-worldmap-worker`](../openspec/changes/game-slg-aggregate-actors-worldmap-worker/proposal.md)（`design.md` 含迁移阶段与写序衔接）。
+
 ---
 
 ### 阶段 5 — 掠夺/结算：Map → Player Ask 与幂等（核心一致性）
