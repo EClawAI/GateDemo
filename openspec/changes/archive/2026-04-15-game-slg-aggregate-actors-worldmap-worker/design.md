@@ -53,3 +53,14 @@
 
 - 沙盘 Actor：**邮箱深度**、处理耗时直方图；Worker：**队列长度**、任务失败率。
 - 与路线图 **阶段 7**（观测）对齐时可合并仪表盘。
+
+## 8. 实例键（实现冻结）
+
+- **玩法键 `gameplayId`**：字符串，区分「每服 × 每玩法一张大地图」的逻辑实例（如 `default`、赛季玩法 ID）；与 `game.id`（本 Game 进程/分服标识）共同决定沙盘 Actor 的**业务边界**。
+- **沙盘 Actor 实例键**：`game.id` + `gameplayId`（配置见 `game.slg.gameplay-id`）；持久化若仍按 `(regionId, cityId)` 存城快照，沙盘路径下可用 `game.slg.sandbox-persistence-region-id` 作为统一 region 槽位，城 ID 仍为 `cityId`。
+- **离线玩家**：是否需 **Mailbox** / **Cluster Sharding** 常驻玩家聚合 **非本 change 强制结论**；当前以 `PlayerSessionRegistry` 在线会话为准，离线掠夺失败语义见集成测试。
+
+## 9. 与 `game-world-region-city-actors` 的关系
+
+- **并存**：`game.slg.sandbox-enabled=false`（默认）时保留 **WorldRegistry → Region → City** 路由；为 **true** 时由 **`WorldMapSandboxBehavior`** 作为大地图唯一写入边界，避免与沙盘双写（迁移期勿同时对同一事件走两套写路径）。
+- **替代**：主规格中「必须三级 Actor」的表述由本能力 **补充/替代**；归档后见 `openspec/specs/game-slg-aggregate-actors-worldmap-worker/spec.md` 与主规格交叉引用。

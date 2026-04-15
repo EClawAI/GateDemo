@@ -8,6 +8,9 @@ spring:
 # Game 服务配置
 game:
   id: ${GAME_ID:1001}
+  slg:
+    gameplay-id: ${GAME_SLG_GAMEPLAY_ID:default}
+    sandbox-persistence-region-id: ${GAME_SLG_SANDBOX_REGION_ID:0}
   persistence:
     flush-interval: ${FLUSH_INTERVAL:30000}
   redis:

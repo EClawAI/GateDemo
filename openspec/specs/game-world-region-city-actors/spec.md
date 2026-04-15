@@ -2,40 +2,33 @@
 
 ## Purpose
 
-规定 **game-service** 如何通过 **WorldRegistry → Region → City** Typed Actor 层级，按 **`regionId` / `cityId`** 路由世界侧命令；**City** 为 **地图缓存占位** 的 **单写者**；为阶段 5 **掠夺 Ask** 提供 **城邮箱**边界。
+规定 **game-service** 大地图侧 **写入边界** 与 **按城路由** 的语义。实现已收敛为 **单沙盘 Typed Actor**（`WorldMapSandboxBehavior`）：**不再**使用 WorldRegistry → Region → City 多级 Actor；逻辑上的 **`regionId`（持久化槽位）+ `cityId`** 仍用于 **城快照键** 与消息中的 **`targetCityId`** 校验。
+
+与 [`game-slg-aggregate-actors-worldmap-worker`](../game-slg-aggregate-actors-worldmap-worker/spec.md) 对齐。
 
 ## Requirements
 
-### Requirement: WorldRegistry 按 regionId 提供 City 路由入口
+### Requirement: 沙盘为大地图唯一路由入口
 
-`game-service` SHALL 提供 **Typed `WorldRegistryBehavior` Actor**，支持 **`RouteToCity(regionId, cityId, cityCommand)`**（或等价结构）：将 **`cityCommand`** 投递至 **由 `(regionId, cityId)` 唯一确定** 的 **`CityBehavior`** 邮箱；**不得**在 **gRPC/Netty 回调线程**上执行城业务逻辑（调用方 **tell** 前仅做轻量封装）。
+`game-service` SHALL 通过 **`WorldMapSandboxBehavior`**（Spring Bean `worldMapSandbox`）接收 **城/地图侧** 命令（如 `CityEnvelope`、`CityPingSeq`、`SettlePlunderVictim`）；**不得**在 **gRPC/Netty 回调线程**上执行地图业务逻辑（调用方 **tell** 前仅做轻量封装）。
 
-#### Scenario: 懒创建 Region 与 City
+#### Scenario: 单邮箱串行
 
-- **WHEN** 首次对某 `(regionId, cityId)` 路由命令
-- **THEN** 实现 **创建**（或复用已存在）**Region** 与 **City** Typed Actor，且后续同键路由 **复用** 同一 City 邮箱
+- **WHEN** 向沙盘连续投递多条命令
+- **THEN** SHALL 在 **同一** Typed Actor 邮箱内 **顺序**处理（全局单写入者；城内逻辑由 `targetCityId` 与 per-city 缓存区分）
 
-### Requirement: 同一 cityId 消息串行处理
+### Requirement: targetCityId 与业务一致
 
-对 **固定** `(regionId, cityId)`，所有进入 **该** `CityBehavior` 邮箱的消息 SHALL **顺序**处理（单 Actor 语义）。
+凡命令携带 **`targetCityId`**，`WorldMapSandboxBehavior` SHALL **仅当** 该字段与命令语义一致时更新 **对应城** 的缓存占位；否则 SHALL **拒绝**（不修改该城缓存、可记录日志）。
 
-#### Scenario: 顺序可观测
+#### Scenario: 错误 target 不污染
 
-- **WHEN** 测试向 **同一** City 连续投递 **多条**可观测命令（如带序号）
-- **THEN** 处理顺序与投递顺序一致（在 **同一线程/邮箱**语义下）
+- **WHEN** 投递 **声明错误 targetCityId** 的入城类命令
+- **THEN** **不得**对无关城缓存产生副作用
 
-### Requirement: targetCityId 与 City 绑定一致
+### Requirement: 每城地图缓存单写者（沙盘邮箱内）
 
-凡 **City** 处理的命令若携带 **`targetCityId`（或等价字段）**，`CityBehavior` SHALL **仅当** `targetCityId` **等于** 本 Actor 绑定的 **`cityId`** 时执行业务逻辑；否则 SHALL **拒绝**（不修改地图缓存占位、可记录日志）。
-
-#### Scenario: 错误 target 不污染正确城
-
-- **WHEN** 向 **city A** 的邮箱投递 **声明 target 为 city B** 的命令
-- **THEN** **city A** 不执行该命令的业务副作用（与 **city B** 的正确队列无关）
-
-### Requirement: 地图缓存单写者（City）
-
-**与某 `cityId` 关联的地图缓存状态**（占位结构即可）SHALL **仅**在 **对应 `CityBehavior`** 的消息处理路径上 **突变**；其他组件 SHALL **不**共享 **可变** 缓存引用 **绕过** City 邮箱。
+**与某 `cityId` 关联的 `CityMapCacheState`** SHALL **仅**在 **`WorldMapSandboxBehavior`** 的消息处理路径上 **突变**；其他组件 SHALL **不**共享 **可变** 缓存引用 **绕过** 沙盘邮箱。
 
 #### Scenario: 缓存归属文档化
 
@@ -44,7 +37,7 @@
 
 ### Requirement: DB 写序原则（与 persistence 文档对齐）
 
-`design.md` SHALL 描述 **同一 City** 下 **内存态与持久化** 的 **顺序原则**，并 **可引用** [`docs/persistence-plan.md`](../../docs/persistence-plan.md)；本阶段 **不**要求实现具体存储或 Outbox。
+`design.md` SHALL 描述 **沙盘侧** 内存态与持久化的 **顺序原则**，并 **可引用** [`docs/persistence-plan.md`](../../docs/persistence-plan.md)。
 
 #### Scenario: 可追溯至 persistence-plan
 

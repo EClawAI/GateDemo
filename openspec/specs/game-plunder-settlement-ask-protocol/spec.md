@@ -2,7 +2,7 @@
 
 ## Purpose
 
-规定 **game-service** 中 **地图/City** 如何通过 **Typed Ask** 向 **PlayerSession** 发起 **`battleId` 幂等**掠夺结算，以及 **Registry** 解析在线会话、**失败/超时** 语义；与 [`docs/pekko-game-actor-openspec-roadmap.md`](../../docs/pekko-game-actor-openspec-roadmap.md) 阶段 5 一致。
+规定 **game-service** 中 **地图/沙盘** 如何通过 **Typed Ask** 向 **PlayerSession** 发起 **`battleId` 幂等**掠夺结算，以及 **Registry** 解析在线会话、**失败/超时** 语义；与 [`docs/pekko-game-actor-openspec-roadmap.md`](../../docs/pekko-game-actor-openspec-roadmap.md) 阶段 5 一致。
 
 ## Requirements
 
@@ -28,13 +28,13 @@
 - **WHEN** `playerId` 无活跃会话
 - **THEN** `replyTo` 收到 **EMPTY**
 
-### Requirement: City 通过 Ask 链完成 Map→Player 结算
+### Requirement: 沙盘通过 Ask 链完成 Map→Player 结算
 
-`CityBehavior` SHALL 处理 **`SettlePlunderVictim(targetCityId, battleId, victimPlayerId, requestedPlunder, replyTo)`**：
+`WorldMapSandboxBehavior` SHALL 处理 **`SettlePlunderVictim(targetCityId, battleId, victimPlayerId, requestedPlunder, replyTo)`**：
 
-- **MUST** **校验** `targetCityId` **等于** 本城 `cityId`。
+- **MUST** **校验** `targetCityId` **与** 本消息语义一致（沙盘内按 `cityId` 分缓存）。
 - **SHALL** **异步** `Ask` **Registry** → **Player** `SettlePlunder`（**不得** 在 gRPC 回调线程执行）。
-- **在** 收到 **`PlunderOk`** 或 **`PlunderDuplicate`** 后：**SHALL** 更新 **本城** 地图缓存占位（例如 `battle-{battleId}`）。
+- **在** 收到 **`PlunderOk`** 或 **`PlunderDuplicate`** 后：**SHALL** 更新 **该城** 地图缓存占位（例如 `battle-{battleId}`）。
 - **在** 失败（离线、超时、拒绝）时：**SHALL** 向 **`replyTo`** 交付 **`PlunderSettlementResult.Failed`**，**且** **不得** 写入上述缓存键。
 
 #### Scenario: 受害者离线则失败
@@ -42,9 +42,9 @@
 - **WHEN** `GetPlayerSession` 返回 **EMPTY**
 - **THEN** `replyTo` 收到 **Failed** 且 **reason** 表示 **offline**（或等价语义）
 
-### Requirement: City 结算状态机可审计
+### Requirement: 沙盘结算状态机可审计
 
-`design.md` SHALL 描述 **City** 侧 **Pending / Committed / Failed** 状态含义（实现 **可** 不显式枚举）。
+`design.md` SHALL 描述 **沙盘** 侧 **Pending / Committed / Failed** 状态含义（实现 **可** 不显式枚举）。
 
 #### Scenario: 文档与实现对齐
 

@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Mongo {@code city_world_state}：单城地图缓存快照（键值占位，由 {@link com.clawai.gatedemo.game.pekko.world.CityBehavior} 单写者更新）。
+ * Mongo {@code city_world_state}：单城地图缓存快照（键值占位，由 {@link com.clawai.gatedemo.game.pekko.world.WorldMapSandboxBehavior} 单写者更新）。
  */
 @Document("city_world_state")
 public class CityWorldStateDocument {

@@ -13,7 +13,7 @@
 |------|------|
 | **Gate 与 Game 边界** | Gate 负责客户端长连与转发；Game 承载主业务。**Game 侧 Actor 不对外取代 gRPC**。 |
 | **会话 vs 世界** | **PlayerSessionActor**（在线会话）≠ **世界权威**（城/地格/分区）。离线玩家不必常驻 Session Actor。 |
-| **SLG 聚合边界** | **城/地块/世界分区**为天然写入边界；攻击、城态变更进入 **City / Region** 邮箱。**玩家**在模型中常以 `ownerId` / `playerId` 引用。 |
+| **SLG 聚合边界** | 大地图侧写入收敛为 **沙盘 Actor**（`WorldMapSandboxBehavior`）；城内逻辑以 `cityId` / `targetCityId` 区分。**玩家**在模型中常以 `ownerId` / `playerId` 引用。 |
 | **资源权威** | 资源读写在 **PlayerActor（或等价钱包聚合）** 内串行完成；**掠夺等由地图触发**时，采用 **请求–响应（Ask / 带 reply）+ `battleId` 幂等**，**最终可掠夺量以 Player 提交为准**，避免地图副本与钱包双真源。 |
 | **地图缓存 + DB** | 对同一城/分区：**单一写入者**顺序更新内存态与持久化策略（同步/异步/Outbox 在提案中选定）；禁止「地图先扣、Player 再对账」导致不一致。 |
 | **线程模型** | Netty / gRPC 回调线程：**只做入队**；阻塞 IO/睡眠不得占用 Actor 默认 dispatcher（必要时常用隔离 dispatcher 或 `pipeToSelf`）。 |
@@ -87,23 +87,22 @@
 
 ---
 
-### 阶段 4 — 世界模型：Region / City Actor 与路由键
+### 阶段 4 — 世界模型：沙盘 Actor 与路由键
 
-**目的**：落地 **「城/分区聚合 + 玩家仅 ID」**；地图缓存归属写入者在此阶段定义。
+**目的**：落地 **「每服 × 每玩法单沙盘 + 玩家仅 ID」**；地图缓存归属写入者在 **单沙盘邮箱** 内定义；逻辑上仍用 **`persistenceRegionId` + `cityId`** 作城快照键。
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| [`add-world-region-and-city-actors`](../openspec/changes/archive/2026-04-14-add-world-region-and-city-actors/proposal.md)（能力：[`openspec/specs/game-world-region-city-actors/spec.md`](../openspec/specs/game-world-region-city-actors/spec.md)） | `design.md`：**routing key**（`regionId` / `cityId`）；父子层级（Region → City 或扁平 Sharding 预备）；**地图缓存**数据结构归属；与 DB 的读写顺序（只描述原则，具体存储可引用 `persistence-plan.md`）。 |
+| 历史：[`add-world-region-and-city-actors`](../openspec/changes/archive/2026-04-14-add-world-region-and-city-actors/proposal.md)（能力：[`openspec/specs/game-world-region-city-actors/spec.md`](../openspec/specs/game-world-region-city-actors/spec.md)） | 规格已演进为 **仅 `WorldMapSandboxBehavior`**（无 World/Region/City 多级 Actor）。 |
+| [`game-slg-aggregate-actors-worldmap-worker`](../openspec/changes/archive/2026-04-15-game-slg-aggregate-actors-worldmap-worker/proposal.md)（能力：[`openspec/specs/game-slg-aggregate-actors-worldmap-worker/spec.md`](../openspec/specs/game-slg-aggregate-actors-worldmap-worker/spec.md)） | 实例键：`game.id` + `game.slg.gameplay-id`；代码入口 `WorldMapSandboxBehavior` / `WorldMapSandboxConfiguration`。 |
 
-**验收**：单测「同一 `cityId` 消息序列化执行」；攻击命令不进入错误的城邮箱。
-
-**演进（可选）**：若分服 SLG 希望 **减少 Region/City 多级 Actor、改为「每服×每玩法单沙盘 Actor + 联盟 Actor + 玩家聚合 + 无状态 Worker」**，见立项 [`game-slg-aggregate-actors-worldmap-worker`](../openspec/changes/game-slg-aggregate-actors-worldmap-worker/proposal.md)（`design.md` 含迁移阶段与写序衔接）。
+**验收**：单测沙盘邮箱内命令顺序可观测；`PlunderSettlementIntegrationTest` 覆盖 Map→Player Ask。
 
 ---
 
 ### 阶段 5 — 掠夺/结算：Map → Player Ask 与幂等（核心一致性）
 
-**目的**：实现讨论确定的 **两阶段语义**：`battleId`、Player 计算并扣减、回复 `actual`、Map 再写战报/部队物资。
+**目的**：实现讨论确定的 **两阶段语义**：`battleId`、Player 计算并扣减、回复 `actual`、沙盘再写战报/地图占位。
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
@@ -111,6 +110,8 @@
 | （可选）`add-battle-reserve-commit-player-wallet` | 若玩法存在 **长行军/围攻**，引入 **Reserve / Commit**；依赖 `add-plunder-settlement-ask-protocol`。 |
 
 **验收**：混沌测试：Player 超时、重复 `battleId`、并发花费资源；最终无「地图已结、钱未扣」或反向双扣。
+
+**实现说明**：掠夺 Ask 由 **`WorldMapSandboxBehavior.SettlePlunderVictim`** 发起；写序与 `battleId` 幂等不变。集成测试见 `game-service` 内 `PlunderSettlementIntegrationTest`。
 
 ---
 
@@ -120,7 +121,7 @@
 
 | 建议 change 名称 | 交付物要点 |
 |------------------|------------|
-| [`game-actor-persistence-and-cache-write-order`](../openspec/changes/archive/2026-04-14-game-actor-persistence-and-cache-write-order/proposal.md)（能力：[`openspec/specs/game-actor-persistence-and-cache-write-order/spec.md`](../openspec/specs/game-actor-persistence-and-cache-write-order/spec.md)） | `design.md`：写序、崩溃恢复、Outbox/事件表（可选）；Player vs City 持久化边界。 |
+| [`game-actor-persistence-and-cache-write-order`](../openspec/changes/archive/2026-04-14-game-actor-persistence-and-cache-write-order/proposal.md)（能力：[`openspec/specs/game-actor-persistence-and-cache-write-order/spec.md`](../openspec/specs/game-actor-persistence-and-cache-write-order/spec.md)） | `design.md`：写序、崩溃恢复、Outbox/事件表（可选）；Player vs 沙盘城持久化边界。 |
 
 **验收**：进程 kill 后重启，城态与钱包可与验收用例对齐。
 
@@ -155,7 +156,7 @@
     ↓
 阶段2 gRPC stream 桥接 ──→ 阶段3 PlayerSessionActor
     ↓                            ↓
-        阶段4 Region/City ──→ 阶段5 掠夺 Ask/幂等
+        阶段4 沙盘/路由 ──→ 阶段5 掠夺 Ask/幂等
                                 ↓
                         阶段6 持久化/缓存（可选并行设计）
                                 ↓
@@ -164,7 +165,7 @@
                         阶段8 Cluster（按需）
 ```
 
-**说明**：阶段 2 与 3 可并行，但 **阶段 4 应在 5 之前**冻结路由与缓存归属；**阶段 5** 依赖 **Player** 与 **City/Settlement** 至少具备桩实现。
+**说明**：阶段 2 与 3 可并行，但 **阶段 4 应在 5 之前**冻结路由与缓存归属；**阶段 5** 依赖 **Player** 与 **沙盘（地图侧）** 至少具备桩实现。
 
 ---
 
@@ -186,7 +187,7 @@
 
 1. 从 **阶段 0** 起执行：`openspec new change "pekko-game-baseline-and-bom"`（名称可按团队习惯微调，保持 kebab-case）。  
 2. 每完成一个 change，在本文对应行打勾或链接到 `openspec/changes/<name>/proposal.md`。  
-3. 若某一阶段需拆分（例如「City Actor」与「Region Actor」分两个 change），在阶段 4 下增加子行即可，**不必改写原则章节**。
+3. 若某一阶段需拆分（例如「沙盘」与「联盟」分两个 change），在阶段 4 下增加子行即可，**不必改写原则章节**。
 
 ---
 

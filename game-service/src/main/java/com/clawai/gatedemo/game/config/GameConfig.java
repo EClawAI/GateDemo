@@ -19,6 +19,8 @@ public class GameConfig {
     private RedisConfig redis = new RedisConfig();
     private StatusConfig status = new StatusConfig();
     private RegistryConfig registry = new RegistryConfig();
+    /** SLG 沙盘 / 联盟 / Worker 等与「大地图聚合」相关的开关与路由键。 */
+    private SlgConfig slg = new SlgConfig();
 
     public static class RedisConfig {
         private String host = "localhost";
@@ -73,4 +75,24 @@ public class GameConfig {
     public void setStatus(StatusConfig status) { this.status = status; }
     public RegistryConfig getRegistry() { return registry; }
     public void setRegistry(RegistryConfig registry) { this.registry = registry; }
+    public SlgConfig getSlg() { return slg; }
+    public void setSlg(SlgConfig slg) { this.slg = slg; }
+
+    /**
+     * 分服 SLG：沙盘 Actor 实例键为 {@code game.id}（本进程分服标识）与 {@link #gameplayId}（玩法模式）；
+     * 持久化层若按 region 分片，可使用 {@link #sandboxPersistenceRegionId} 与城 {@code cityId} 组合。
+     */
+    public static class SlgConfig {
+        /** 玩法模式键，与 {@code game.id} 共同确定「每服 × 每玩法」沙盘逻辑实例。 */
+        private String gameplayId = "default";
+        /** 沙盘侧 {@link com.clawai.gatedemo.game.persistence.CityWorldStatePersistence} 使用的 region 槽位（单沙盘多城时共用）。 */
+        private long sandboxPersistenceRegionId = 0L;
+
+        public String getGameplayId() { return gameplayId; }
+        public void setGameplayId(String gameplayId) { this.gameplayId = gameplayId; }
+        public long getSandboxPersistenceRegionId() { return sandboxPersistenceRegionId; }
+        public void setSandboxPersistenceRegionId(long sandboxPersistenceRegionId) {
+            this.sandboxPersistenceRegionId = sandboxPersistenceRegionId;
+        }
+    }
 }

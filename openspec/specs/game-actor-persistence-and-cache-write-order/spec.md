@@ -2,7 +2,7 @@
 
 ## Purpose
 
-规定 **game-service** 中 **Player 掠夺结算**与 **City 地图缓存**的 **Mongo 持久化**、**写序**与**重启恢复**语义；与 [`docs/pekko-game-actor-openspec-roadmap.md`](../../docs/pekko-game-actor-openspec-roadmap.md) 阶段 6 一致，并建立在 [`game-plunder-settlement-ask-protocol`](../game-plunder-settlement-ask-protocol/spec.md) 的 Ask 协议之上。
+规定 **game-service** 中 **Player 掠夺结算**与 **沙盘城地图缓存**的 **Mongo 持久化**、**写序**与**重启恢复**语义；与 [`docs/pekko-game-actor-openspec-roadmap.md`](../../docs/pekko-game-actor-openspec-roadmap.md) 阶段 6 一致，并建立在 [`game-plunder-settlement-ask-protocol`](../game-plunder-settlement-ask-protocol/spec.md) 的 Ask 协议之上。
 
 ## Requirements
 
@@ -20,11 +20,11 @@
 - **WHEN** Mongo 中已存在某 `battleId` 的结算记录
 - **THEN** 再次 **`trySettle`** **不得**再次扣减 **`gold`**，且 **回复** **Duplicate** 与已存 **actual**
 
-### Requirement: City 地图快照可持久化与回填
+### Requirement: 城地图快照可持久化与回填
 
 当 **`CityWorldStatePersistence` 非 null** 时：
 
-- **`CityBehavior` 启动**：SHALL **`loadSnapshot(regionId, cityId)`** 并将条目写入 **`CityMapCacheState`**。
+- **首次访问某城**：SHALL **`loadSnapshot(persistenceRegionId, cityId)`** 并将条目写入该城对应的 **`CityMapCacheState`**（沙盘内按 `cityId` 懒加载）。
 - **在** **`CityEnvelope` 接受并 `putTile`** 之后：SHALL **`saveSnapshot`** 当前快照。
 - **在** **`PlunderOk` 或 `PlunderDuplicate` 更新 `battle-*` 键后**：SHALL **`saveSnapshot`**。
 
@@ -33,20 +33,20 @@
 - **WHEN** **`CityWorldStatePersistence`** 为 **null**（例如部分测试）
 - **THEN** **不得**抛错；**仅** 内存缓存行为
 
-### Requirement: World 链注入城态持久化
+### Requirement: 沙盘注入城态持久化
 
-`WorldRegistryBehavior` / `RegionBehavior` SHALL 将 **`CityWorldStatePersistence`** 传入 **`CityBehavior.create(..., cityWorldStateOrNull)`**。
+`WorldMapSandboxConfiguration` SHALL 将 **`CityWorldStatePersistence`** 传入 **`WorldMapSandboxBehavior.create(..., cityWorldStatePersistence, ...)`**。
 
 #### Scenario: Spring 环境使用 Mongo 实现
 
 - **WHEN** 应用启动且存在 **`MongoCityWorldStatePersistence`** Bean
-- **THEN** **World** 创建的 **City** **可**加载/保存 **`city_world_state`**
+- **THEN** **沙盘** **可**按城加载/保存 **`city_world_state`**
 
 ### Requirement: 设计文档描述写序与可选 Outbox
 
-`design.md` SHALL 说明 **Player 先于 City 落库/承诺** 的顺序，并 **提及** **Outbox/事件表** 为可选强一致方案（本实现可不落地）。
+`design.md` SHALL 说明 **Player 先于沙盘落库/承诺** 的顺序，并 **提及** **Outbox/事件表** 为可选强一致方案（本实现可不落地）。
 
 #### Scenario: 审阅者可理解崩溃窗口
 
 - **WHEN** 阅读 `design.md` 写序与崩溃恢复小节
-- **THEN** 可见 **钱已扣、城未写** 的窗口与缓解思路（重试 Duplicate / Outbox）
+- **THEN** 可见 **钱已扣、地图未写** 的窗口与缓解思路（重试 Duplicate / Outbox）
