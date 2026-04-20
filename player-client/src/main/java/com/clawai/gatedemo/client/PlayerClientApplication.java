@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.client;
 
 import com.clawai.gatedemo.client.service.PlayerClientService;
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -11,6 +12,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 @SpringBootApplication
 public class PlayerClientApplication implements CommandLineRunner {
+
+    static {
+        MessageRouteRegistry.loadFromJson("message_registry.json");
+    }
 
     private final PlayerClientService clientService;
 

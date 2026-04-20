@@ -1,4 +1,9 @@
 # Prod profile: TLS enabled, INFO logging, secrets via env vars only
+spring:
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI}
+
 game:
   redis:
     password: ${REDIS_PASSWORD}

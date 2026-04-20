@@ -39,6 +39,7 @@ public final class WorldMapSandboxBehavior {
                     CityEnvelope,
                     CityPingSeq,
                     SettlePlunderVictim,
+                    PlayerBattleMove,
                     EvaluateFakeCombat,
                     FakeCombatDone,
                     GotSession,
@@ -58,6 +59,11 @@ public final class WorldMapSandboxBehavior {
             long requestedPlunder,
             ActorRef<PlunderSettlementResult> replyTo)
             implements Command {}
+
+    /**
+     * 客户端战斗移动经 {@link com.clawai.gatedemo.game.handler.BattleMoveHandler} 转发至沙盘（单写者邮箱内记录日志）。
+     */
+    public record PlayerBattleMove(long playerId, int gameId, int x, int y) implements Command {}
 
     /**
      * 示例：将纯函数战斗结算投递到 Worker 线程，结果经邮箱回投后再更新沙盘（见 {@link FakeCombatDone}）。
@@ -90,6 +96,7 @@ public final class WorldMapSandboxBehavior {
                             .onMessage(
                                     SettlePlunderVictim.class,
                                     s -> startPlunder(ctx, playerSessionRegistry, s))
+                            .onMessage(PlayerBattleMove.class, m -> onPlayerBattleMove(ctx, m))
                             .onMessage(GotSession.class, g -> onGotSession(ctx, g))
                             .onMessage(
                                     GotPlunder.class,
@@ -104,6 +111,17 @@ public final class WorldMapSandboxBehavior {
 
     private static Behavior<Command> onPing(ActorContext<Command> ctx, SandboxPing p) {
         p.replyTo().tell(1);
+        return Behaviors.same();
+    }
+
+    private static Behavior<Command> onPlayerBattleMove(ActorContext<Command> ctx, PlayerBattleMove m) {
+        ctx.getLog()
+                .info(
+                        "大地图沙盘收到战斗移动: playerId={}, gameId={}, x={}, y={}",
+                        m.playerId(),
+                        m.gameId(),
+                        m.x(),
+                        m.y());
         return Behaviors.same();
     }
 

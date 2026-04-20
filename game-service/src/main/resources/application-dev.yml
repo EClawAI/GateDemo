@@ -1,8 +1,4 @@
-# Dev profile: local defaults, TLS off, debug logging
-game:
-  redis:
-    password: redistest
-
+# Dev profile: TLS off, debug logging（Redis/Mongo 见 application.yml 或环境变量）
 grpc:
   tls:
     enabled: false

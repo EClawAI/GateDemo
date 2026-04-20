@@ -8,7 +8,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,7 +30,7 @@ public class GameDiscoveryService {
     private static final String REGISTRY_KEY_PREFIX = "game:registry:";
     private static final String EVENT_CHANNEL = "game:events";
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final RedisMessageListenerContainer listenerContainer;
     private final GateConfig gateConfig;
     private final GameGrpcClientPool gameGrpcClientPool;
@@ -39,16 +39,16 @@ public class GameDiscoveryService {
     private final Map<Integer, GameInstance> gameMap = new ConcurrentHashMap<>();
 
     /**
-     * @param redisTemplate       扫描注册表 key、读实例数据
+     * @param stringRedisTemplate 读 {@code game:registry:*} 纯字符串值（与 game-service 写入一致）
      * @param listenerContainer   订阅游戏事件频道
      * @param gateConfig          是否启用发现、过期阈值等
      * @param gameGrpcClientPool  增删 gRPC 连接
      */
-    public GameDiscoveryService(RedisTemplate<String, Object> redisTemplate,
+    public GameDiscoveryService(StringRedisTemplate stringRedisTemplate,
                                RedisMessageListenerContainer listenerContainer,
                                GateConfig gateConfig,
                                GameGrpcClientPool gameGrpcClientPool) {
-        this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.listenerContainer = listenerContainer;
         this.gateConfig = gateConfig;
         this.gameGrpcClientPool = gameGrpcClientPool;
@@ -69,12 +69,12 @@ public class GameDiscoveryService {
 
     private void loadGameInstances() {
         try {
-            Set<String> keys = redisTemplate.keys(REGISTRY_KEY_PREFIX + "*");
+            Set<String> keys = stringRedisTemplate.keys(REGISTRY_KEY_PREFIX + "*");
             if (keys != null) {
                 for (String key : keys) {
-                    Object value = redisTemplate.opsForValue().get(key);
+                    String value = stringRedisTemplate.opsForValue().get(key);
                     if (value != null) {
-                        GameInstance instance = parseGameInstance(key, value.toString());
+                        GameInstance instance = parseGameInstance(key, value);
                         if (instance != null && instance.isAvailable()) {
                             gameMap.put(instance.getId(), instance);
                             connectToGame(instance);
@@ -165,21 +165,21 @@ public class GameDiscoveryService {
 
         try {
             long staleThreshold = gateConfig.getDiscovery().getStaleThreshold();
-            Set<String> keys = redisTemplate.keys(REGISTRY_KEY_PREFIX + "*");
+            Set<String> keys = stringRedisTemplate.keys(REGISTRY_KEY_PREFIX + "*");
 
             if (keys == null) {
                 return;
             }
 
             for (String key : keys) {
-                Object value = redisTemplate.opsForValue().get(key);
+                String value = stringRedisTemplate.opsForValue().get(key);
                 if (value == null) {
                     int gameId = extractGameId(key);
                     handleGameOffline(gameId);
                     continue;
                 }
 
-                String[] parts = value.toString().split(":");
+                String[] parts = value.split(":");
                 if (parts.length >= 4) {
                     long timestamp = Long.parseLong(parts[3]);
                     if (System.currentTimeMillis() - timestamp > staleThreshold) {

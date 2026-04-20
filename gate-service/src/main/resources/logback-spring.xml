@@ -25,7 +25,7 @@
             <appender-ref ref="JSON_CONSOLE"/>
         </root>
     </springProfile>
-    <springProfile name="!prod & !production">
+    <springProfile name="!prod &amp; !production">
         <root level="INFO">
             <appender-ref ref="PLAIN_CONSOLE"/>
         </root>

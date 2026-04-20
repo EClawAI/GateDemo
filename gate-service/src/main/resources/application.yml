@@ -16,6 +16,7 @@ gate:
   redis:
     host: ${REDIS_HOST:localhost}
     port: ${REDIS_PORT:6379}
+    username: ${REDIS_USERNAME:}
     password: ${REDIS_PASSWORD:redistest}
     # Sentinel mode: when master is set, use Sentinel instead of standalone
     # sentinel:

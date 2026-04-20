@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +26,7 @@ public class GameStatusService {
     /** 状态键 TTL（秒），需小于或等于心跳间隔以保证键不中断续期。 */
     private static final long KEY_EXPIRE_SECONDS = 60;
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final GameConfig gameConfig;
     private final GameRegistryService registryService;
 
@@ -37,15 +37,15 @@ public class GameStatusService {
     private boolean initialized = false;
 
     /**
-     * @param redisTemplate    状态键读写
+     * @param stringRedisTemplate 状态键纯字符串读写（与 login-service 一致）
      * @param gameConfig       解析 gameId 等
      * @param registryService  状态变化时发布 UPDATE（可为 null 则跳过）
      */
     public GameStatusService(
-            RedisTemplate<String, Object> redisTemplate,
+            StringRedisTemplate stringRedisTemplate,
             GameConfig gameConfig,
             @Lazy GameRegistryService registryService) {
-        this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.gameConfig = gameConfig;
         this.registryService = registryService;
     }
@@ -59,13 +59,30 @@ public class GameStatusService {
     }
 
     /**
-     * 应用就绪后标记可同步，并将状态设为「已启动不可登录」直至 {@link GameServiceApplication} 再改为可登录。
+     * 应用就绪后补写 Redis（若尚未由 Runner 激活）。
+     * <p>
+     * 注意：{@link com.clawai.gatedemo.game.GameServiceApplication} 在 {@link org.springframework.boot.CommandLineRunner} 里会
+     * {@code latch.await()} 阻塞进程，Spring Boot 仅在<strong>所有</strong> Runner 返回后才发布
+     * {@link ApplicationReadyEvent}，因此 Ready 在默认实现下<strong>永远不会先到</strong>。
+     * 必须在 Runner 内调用 {@link #activateRedisSyncFromRunner()}，否则 {@code initialized} 一直为 false，
+     * {@link #syncStatusToRedis()} 与定时任务都不会写 Redis。
      */
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        logger.info("GameStatusService starting, gameId: {}", gameConfig.getId());
+        logger.info("GameStatusService ApplicationReady, gameId: {}, currentStatus={}", gameConfig.getId(), currentStatus);
+        if (!initialized) {
+            initialized = true;
+            syncStatusToRedis();
+        }
+    }
+
+    /**
+     * 由 {@link com.clawai.gatedemo.game.GameServiceApplication} 在阻塞 {@code latch.await()} 之前调用。
+     */
+    public void activateRedisSyncFromRunner() {
+        logger.info("GameStatusService activating Redis sync from CommandLineRunner (gameId={})", gameConfig.getId());
         initialized = true;
-        setStatus(GameStatus.STARTED_NOT_LOGIN);
+        syncStatusToRedis();
     }
 
     public void setStatus(GameStatus status) {
@@ -116,9 +133,8 @@ public class GameStatusService {
                 onlinePlayerCount,
                 System.currentTimeMillis());
 
-            redisTemplate.opsForValue().set(key, value, KEY_EXPIRE_SECONDS, TimeUnit.SECONDS);
-            logger.debug("Game status synced to Redis: gameId={}, status={}, online={}",
-                gameConfig.getId(), currentStatus.getValue(), onlinePlayerCount);
+            stringRedisTemplate.opsForValue().set(key, value, KEY_EXPIRE_SECONDS, TimeUnit.SECONDS);
+            logger.info("Game status synced to Redis: key={}, value={}", key, value);
         } catch (Exception e) {
             logger.warn("Failed to sync game status to Redis: {}", e.getMessage());
         }

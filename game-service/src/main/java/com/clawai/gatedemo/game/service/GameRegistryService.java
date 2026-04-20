@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +25,7 @@ public class GameRegistryService {
     /** 注册/注销/状态变更的 Pub/Sub 频道名。 */
     private static final String EVENT_CHANNEL = "game:events";
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final GameConfig gameConfig;
     private final GameStatusService gameStatusService;
 
@@ -33,23 +33,32 @@ public class GameRegistryService {
     private boolean initialized = false;
 
     /**
-     * @param redisTemplate     读写注册键与 Pub/Sub
+     * @param stringRedisTemplate 注册表纯字符串写入，避免 Gate 侧 Jackson 反序列化后无法解析 host:port:status
      * @param gameConfig        实例标识、注册开关与 TTL 等
      * @param gameStatusService 读取当前状态写入注册值
      */
-    public GameRegistryService(RedisTemplate<String, Object> redisTemplate, 
-                               GameConfig gameConfig, 
+    public GameRegistryService(StringRedisTemplate stringRedisTemplate,
+                               GameConfig gameConfig,
                                GameStatusService gameStatusService) {
-        this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.gameConfig = gameConfig;
         this.gameStatusService = gameStatusService;
     }
 
     /**
-     * 应用就绪后若开启注册则置位并执行首次 {@link #register()}。
+     * 应用就绪后执行注册；若 {@link com.clawai.gatedemo.game.GameServiceApplication} 已在 Runner 中
+     * {@link #activateRegistryFromRunner()}，则此处仅再 {@link #register()} 续写一次。
      */
     @EventListener(ApplicationReadyEvent.class)
-    public void init() {
+    public void onApplicationReady() {
+        activateRegistryFromRunner();
+    }
+
+    /**
+     * 由 {@link com.clawai.gatedemo.game.GameServiceApplication} 在阻塞 {@code latch.await()} 之前调用，
+     * 否则 {@link ApplicationReadyEvent} 不会发布，注册表永远不会写入 Redis。
+     */
+    public void activateRegistryFromRunner() {
         if (!gameConfig.getRegistry().isEnabled()) {
             logger.info("Game registry is disabled");
             return;
@@ -78,14 +87,14 @@ public class GameRegistryService {
                 status,
                 timestamp);
 
-            redisTemplate.opsForValue().set(
+            stringRedisTemplate.opsForValue().set(
                 REGISTRY_KEY_PREFIX + gameId,
                 value,
                 gameConfig.getRegistry().getTtlSeconds(),
                 TimeUnit.SECONDS
             );
 
-            redisTemplate.convertAndSend(EVENT_CHANNEL,
+            stringRedisTemplate.convertAndSend(EVENT_CHANNEL,
                 String.format("REGISTER:%d:%s", gameId, value));
 
             logger.info("Game registered: gameId={}, host={}, port={}, status={}",
@@ -105,8 +114,8 @@ public class GameRegistryService {
         }
         try {
             int gameId = parseGameId(gameConfig.getId());
-            redisTemplate.delete(REGISTRY_KEY_PREFIX + gameId);
-            redisTemplate.convertAndSend(EVENT_CHANNEL,
+            stringRedisTemplate.delete(REGISTRY_KEY_PREFIX + gameId);
+            stringRedisTemplate.convertAndSend(EVENT_CHANNEL,
                 String.format("UNREGISTER:%d", gameId));
             logger.info("Game unregistered: gameId={}", gameId);
         } catch (Exception e) {
@@ -134,7 +143,7 @@ public class GameRegistryService {
         }
         try {
             int gameId = parseGameId(gameConfig.getId());
-            redisTemplate.convertAndSend(EVENT_CHANNEL,
+            stringRedisTemplate.convertAndSend(EVENT_CHANNEL,
                 String.format("UPDATE:%d:%d", gameId, newStatus));
             logger.info("Game status update published: gameId={}, status={}", gameId, newStatus);
         } catch (Exception e) {

@@ -2,6 +2,7 @@ package com.clawai.gatedemo.client.handler;
 
 import com.clawai.gatedemo.client.config.PlayerClientConfig;
 import com.clawai.gatedemo.client.protocol.model.MessageHeader;
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.client.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.client.protocol.model.WrappedMessage;
 import com.clawai.gatedemo.proto.gate.AuthRequest;
@@ -24,11 +25,6 @@ import org.springframework.stereotype.Component;
 public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessage> {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerNettyHandler.class);
-
-    private static final int MSG_ID_AUTH = 0x1001;
-    private static final int MSG_ID_HEARTBEAT = 0x2001;
-    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
-    private static final int MSG_ID_BATTLE_MOVE = 0x3001;
 
     private final PlayerClientConfig config;
     private boolean connected = false;
@@ -60,14 +56,14 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
         int messageId = message.getHeader().getMessageId();
         byte[] bodyBytes = message.getBody() != null ? message.getBody().toBytes() : new byte[0];
 
-        if (messageId == MSG_ID_AUTH) {
+        if (messageId == MessageRouteRegistry.getIdByName("AuthRequest")) {
             AuthResponse resp = AuthResponse.parseFrom(bodyBytes);
             if (resp.getSuccess()) {
                 logger.info("认证成功！玩家 ID: {}", resp.getPlayerId());
             } else {
                 logger.warn("认证失败: {}", resp.getMessage());
             }
-        } else if (messageId == MSG_ID_HEARTBEAT_ACK) {
+        } else if (messageId == MessageRouteRegistry.getIdByName("HeartbeatAck")) {
             HeartbeatAck ack = HeartbeatAck.parseFrom(bodyBytes);
             logger.debug("心跳响应: serverTime={}", ack.getServerTime());
         } else {
@@ -89,13 +85,19 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
     }
 
     private void sendAuth(ChannelHandlerContext ctx) {
+        String token = config.getAuthToken();
+        if (token == null || token.isBlank()) {
+            logger.error("未配置 player.auth-token / PLAYER_JWT，无法认证");
+            ctx.close();
+            return;
+        }
         AuthRequest authReq = AuthRequest.newBuilder()
-                .setToken("demo-token")
-                .setGameId(1001)
+                .setToken(token)
+                .setGameId(config.getGameId())
                 .build();
 
         WrappedMessage msg = new WrappedMessage();
-        msg.getHeader().setMessageId(MSG_ID_AUTH);
+        msg.getHeader().setMessageId(MessageRouteRegistry.getIdByName("AuthRequest"));
         msg.getHeader().setMode(MessageHeader.MODE_REQUEST);
         msg.setBody(new RawMessageBody(authReq.toByteArray()));
 
@@ -110,7 +112,7 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
                 .setTimestamp(System.currentTimeMillis()).build();
 
         WrappedMessage msg = new WrappedMessage();
-        msg.getHeader().setMessageId(MSG_ID_HEARTBEAT);
+        msg.getHeader().setMessageId(MessageRouteRegistry.getIdByName("ClientHeartbeat"));
         msg.setBody(new RawMessageBody(hb.toByteArray()));
 
         ctx.writeAndFlush(msg);
@@ -123,7 +125,7 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
         CgBattleMove move = CgBattleMove.newBuilder().setX(x).setY(y).build();
 
         WrappedMessage msg = new WrappedMessage();
-        msg.getHeader().setMessageId(MSG_ID_BATTLE_MOVE);
+        msg.getHeader().setMessageId(MessageRouteRegistry.getIdByName("CgBattleMove"));
         msg.setBody(new RawMessageBody(move.toByteArray()));
 
         ctx.writeAndFlush(msg);

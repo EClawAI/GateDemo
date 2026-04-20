@@ -25,6 +25,8 @@ public class GameConfig {
     public static class RedisConfig {
         private String host = "localhost";
         private int port = 6379;
+        /** Redis 6+ ACL 用户名；空表示仅密码认证（{@code AUTH password}） */
+        private String username = "";
         private String password = "";
         /** Redis 逻辑库编号。 */
         private int database = 0;
@@ -33,6 +35,8 @@ public class GameConfig {
         public void setHost(String host) { this.host = host; }
         public int getPort() { return port; }
         public void setPort(int port) { this.port = port; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
         public int getDatabase() { return database; }

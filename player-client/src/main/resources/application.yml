@@ -7,6 +7,8 @@ spring:
 
 player:
   player-id: ${PLAYER_ID:100001}
+  auth-token: ${PLAYER_JWT:}
+  game-id: ${GAME_ID:1001}
   host: ${GATE_HOST:localhost}
   port: ${GATE_PORT:8888}  # WebSocket 复用 HTTP 端口
   heartbeat-interval: 30

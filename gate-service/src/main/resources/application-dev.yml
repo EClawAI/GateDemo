@@ -1,7 +1,5 @@
-# Dev profile: local defaults, TLS off, debug logging
+# Dev profile: TLS off, debug logging（Redis 密码见 application.yml / REDIS_PASSWORD）
 gate:
-  redis:
-    password: redistest
   tls:
     enabled: false
   jwt:

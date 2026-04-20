@@ -29,6 +29,8 @@ public class LoginConfig {
     public static class RedisConfig {
         private String host = "localhost";
         private int port = 6379;
+        /** Redis 6+ ACL 用户名；空表示仅密码认证 */
+        private String username = "";
         private String password = "";
         private int database = 0;
     }

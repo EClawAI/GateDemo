@@ -9,8 +9,9 @@ services:
       - gatedemo
     volumes:
       - redis-data:/data
+    command: ["redis-server", "--requirepass", "redistest"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redistest", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -24,8 +25,28 @@ services:
       - gatedemo
     volumes:
       - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: MyWar185mongo
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--host",
+          "localhost",
+          "--port",
+          "27017",
+          "-u",
+          "root",
+          "-p",
+          "MyWar185mongo",
+          "--authenticationDatabase",
+          "admin",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -58,12 +79,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SERVER_PORT=9086
-      - SPRING_DATA_REDIS_HOST=redis
-      - SPRING_DATA_REDIS_PORT=6379
-      - SPRING_DATA_REDIS_PASSWORD=
-      - LOGIN_REDIS_HOST=redis
-      - LOGIN_REDIS_PORT=6379
-      - LOGIN_REDIS_PASSWORD=
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redistest
       - JWT_SECRET=${JWT_SECRET:-DefaultGateDemoSecretKeyForHMACSHA256Auth!}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9086/health"]
@@ -89,10 +107,13 @@ services:
       - GRPC_PORT=9090
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=redistest
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB=gatedemo
+      - MONGO_ROOT_USERNAME=root
+      - MONGO_ROOT_PASSWORD=MyWar185mongo
+      - MONGO_AUTH_SOURCE=admin
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:9090"]
       interval: 10s
@@ -123,7 +144,7 @@ services:
       - GAME_1001_PORT=9090
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=redistest
       - JWT_SECRET=${JWT_SECRET:-DefaultGateDemoSecretKeyForHMACSHA256Auth!}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8890/health"]
@@ -155,7 +176,7 @@ services:
       - GAME_1001_PORT=9090
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=redistest
       - JWT_SECRET=${JWT_SECRET:-DefaultGateDemoSecretKeyForHMACSHA256Auth!}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8890/health"]

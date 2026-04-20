@@ -4,6 +4,7 @@ import com.clawai.gatedemo.login.config.LoginConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,11 +23,17 @@ public class GameRouteService {
     private static final long PLAYER_LOGIN_EXPIRE_SECONDS = 7 * 24 * 3600;
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final LoginConfig loginConfig;
     private final GateService gateService;
 
-    public GameRouteService(RedisTemplate<String, Object> redisTemplate, LoginConfig loginConfig, GateService gateService) {
+    public GameRouteService(
+            RedisTemplate<String, Object> redisTemplate,
+            StringRedisTemplate stringRedisTemplate,
+            LoginConfig loginConfig,
+            GateService gateService) {
         this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.loginConfig = loginConfig;
         this.gateService = gateService;
     }
@@ -78,9 +85,8 @@ public class GameRouteService {
         }
         try {
             String key = GAME_STATUS_KEY_PREFIX + gameId;
-            Object value = redisTemplate.opsForValue().get(key);
-            if (value != null) {
-                String str = value.toString();
+            String str = stringRedisTemplate.opsForValue().get(key);
+            if (str != null && !str.isBlank()) {
                 int status = Integer.parseInt(str.split(":")[0]);
                 return GameStatus.fromValue(status);
             }
@@ -113,17 +119,16 @@ public class GameRouteService {
 
     public Integer getLastLoginGame(Long playerId) {
         String key = PLAYER_LASTGAME_KEY_PREFIX + playerId;
-        Object value = redisTemplate.opsForValue().get(key);
-        
-        if (value != null) {
+        String str = stringRedisTemplate.opsForValue().get(key);
+
+        if (str != null && !str.isBlank()) {
             try {
-                String str = value.toString();
                 return Integer.parseInt(str.split(":")[0]);
             } catch (NumberFormatException e) {
-                logger.warn("Invalid player login record: {}", value);
+                logger.warn("Invalid player login record: {}", str);
             }
         }
-        
+
         return null;
     }
 
@@ -136,7 +141,7 @@ public class GameRouteService {
     public void savePlayerLoginRecord(Long playerId, Integer gameId) {
         String key = PLAYER_LASTGAME_KEY_PREFIX + playerId;
         String value = gameId + ":" + System.currentTimeMillis();
-        redisTemplate.opsForValue().set(key, value, PLAYER_LOGIN_EXPIRE_SECONDS, TimeUnit.SECONDS);
+        stringRedisTemplate.opsForValue().set(key, value, PLAYER_LOGIN_EXPIRE_SECONDS, TimeUnit.SECONDS);
         logger.info("Player {} login record saved, gameId: {}", playerId, gameId);
     }
 

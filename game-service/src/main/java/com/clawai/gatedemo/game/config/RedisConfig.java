@@ -6,6 +6,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -33,10 +34,21 @@ public class RedisConfig {
         config.setHostName(gameConfig.getRedis().getHost());
         config.setPort(gameConfig.getRedis().getPort());
         config.setDatabase(gameConfig.getRedis().getDatabase());
+        if (gameConfig.getRedis().getUsername() != null && !gameConfig.getRedis().getUsername().isEmpty()) {
+            config.setUsername(gameConfig.getRedis().getUsername());
+        }
         if (gameConfig.getRedis().getPassword() != null && !gameConfig.getRedis().getPassword().isEmpty()) {
             config.setPassword(gameConfig.getRedis().getPassword());
         }
         return new LettuceConnectionFactory(config);
+    }
+
+    /**
+     * 纯字符串 KV，供 {@code game:status:*} 等与 Login 共读的键，避免 Jackson 包装导致对端解析失败。
+     */
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
     }
 
     /**

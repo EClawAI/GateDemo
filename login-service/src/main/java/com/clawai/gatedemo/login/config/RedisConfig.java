@@ -6,6 +6,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -27,10 +28,18 @@ public class RedisConfig {
         config.setHostName(loginConfig.getRedis().getHost());
         config.setPort(loginConfig.getRedis().getPort());
         config.setDatabase(loginConfig.getRedis().getDatabase());
+        if (loginConfig.getRedis().getUsername() != null && !loginConfig.getRedis().getUsername().isEmpty()) {
+            config.setUsername(loginConfig.getRedis().getUsername());
+        }
         if (loginConfig.getRedis().getPassword() != null && !loginConfig.getRedis().getPassword().isEmpty()) {
             config.setPassword(loginConfig.getRedis().getPassword());
         }
         return new LettuceConnectionFactory(config);
+    }
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
     }
 
     @Bean

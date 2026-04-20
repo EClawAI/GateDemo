@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.client.service;
 
 import com.clawai.gatedemo.client.config.PlayerConfig;
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.proto.gate.AuthRequest;
 import com.clawai.gatedemo.proto.gate.AuthResponse;
 import com.clawai.gatedemo.proto.gate.ClientHeartbeat;
@@ -32,11 +33,6 @@ import java.util.concurrent.CountDownLatch;
 public class PlayerClientService {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientService.class);
-
-    private static final int MSG_ID_AUTH = 0x1001;
-    private static final int MSG_ID_HEARTBEAT = 0x2001;
-    private static final int MSG_ID_HEARTBEAT_ACK = 0x2002;
-    private static final int MSG_ID_BATTLE_MOVE = 0x3001;
 
     private static final int HEADER_SIZE = 16;
 
@@ -81,13 +77,18 @@ public class PlayerClientService {
 
     private void authenticate(WebSocketSession session) {
         try {
+            String token = playerConfig.getAuthToken();
+            if (token == null || token.isBlank()) {
+                logger.error("未配置 JWT：请设置 player.auth-token 或环境变量 PLAYER_JWT（login-service POST /api/v1/login 返回的 token）");
+                return;
+            }
             AuthRequest authReq = AuthRequest.newBuilder()
-                    .setToken("demo-token")
-                    .setGameId(1001)
+                    .setToken(token)
+                    .setGameId(playerConfig.getGameId())
                     .build();
 
-            sendBinaryMessage(session, MSG_ID_AUTH, 0x0000, authReq.toByteArray());
-            logger.info("Auth message sent (binary)");
+            sendBinaryMessage(session, MessageRouteRegistry.getIdByName("AuthRequest"), 0x0000, authReq.toByteArray());
+            logger.info("Auth message sent (binary), gameId={}", playerConfig.getGameId());
         } catch (Exception e) {
             logger.error("Failed to send auth: {}", e.getMessage());
         }
@@ -101,7 +102,7 @@ public class PlayerClientService {
                     if (currentSession != null && currentSession.isOpen()) {
                         ClientHeartbeat hb = ClientHeartbeat.newBuilder()
                                 .setTimestamp(System.currentTimeMillis()).build();
-                        sendBinaryMessage(session, MSG_ID_HEARTBEAT, 0, hb.toByteArray());
+                        sendBinaryMessage(session, MessageRouteRegistry.getIdByName("ClientHeartbeat"), 0, hb.toByteArray());
                         logger.debug("Heartbeat sent (binary)");
                     }
                 } catch (InterruptedException e) {
@@ -135,14 +136,15 @@ public class PlayerClientService {
                 bb.get(bodyBytes);
             }
 
-            if (messageId == MSG_ID_AUTH) {
+            // Gate 对 Auth 的应答复用与请求相同的 messageId（见 GateNettyWebSocketHandler#handleAuth）
+            if (messageId == MessageRouteRegistry.getIdByName("AuthRequest")) {
                 AuthResponse resp = AuthResponse.parseFrom(bodyBytes);
                 if (resp.getSuccess()) {
                     logger.info("Authentication successful! playerId={}", resp.getPlayerId());
                 } else {
                     logger.warn("Authentication failed: {}", resp.getMessage());
                 }
-            } else if (messageId == MSG_ID_HEARTBEAT_ACK) {
+            } else if (messageId == MessageRouteRegistry.getIdByName("HeartbeatAck")) {
                 HeartbeatAck ack = HeartbeatAck.parseFrom(bodyBytes);
                 logger.debug("Heartbeat acknowledged: serverTime={}", ack.getServerTime());
             } else {
@@ -186,7 +188,7 @@ public class PlayerClientService {
     private void sendMoveMessage(int x, int y) {
         try {
             CgBattleMove move = CgBattleMove.newBuilder().setX(x).setY(y).build();
-            sendBinaryMessage(currentSession, MSG_ID_BATTLE_MOVE, 0, move.toByteArray());
+            sendBinaryMessage(currentSession, MessageRouteRegistry.getIdByName("CgBattleMove"), 0, move.toByteArray());
             logger.info("Sent battle.move: x={}, y={}", x, y);
         } catch (Exception e) {
             logger.error("Failed to send game message: {}", e.getMessage());
@@ -197,7 +199,7 @@ public class PlayerClientService {
         try {
             ClientHeartbeat hb = ClientHeartbeat.newBuilder()
                     .setTimestamp(System.currentTimeMillis()).build();
-            sendBinaryMessage(currentSession, MSG_ID_HEARTBEAT, 0, hb.toByteArray());
+            sendBinaryMessage(currentSession, MessageRouteRegistry.getIdByName("ClientHeartbeat"), 0, hb.toByteArray());
             logger.info("Heartbeat sent");
         } catch (Exception e) {
             logger.error("Failed to send heartbeat: {}", e.getMessage());

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,7 +17,7 @@ import static org.mockito.Mockito.*;
 class GameDiscoveryServiceTest {
 
     @Mock
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Mock
     private RedisMessageListenerContainer listenerContainer;
@@ -33,7 +33,7 @@ class GameDiscoveryServiceTest {
         gateConfig = new GateConfig();
         gateConfig.getDiscovery().setEnabled(false);
         discoveryService = new GameDiscoveryService(
-            redisTemplate, listenerContainer, gateConfig, gameGrpcClientPool);
+            stringRedisTemplate, listenerContainer, gateConfig, gameGrpcClientPool);
     }
 
     @Test

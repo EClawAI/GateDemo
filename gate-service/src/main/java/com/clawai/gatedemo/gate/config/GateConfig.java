@@ -204,6 +204,8 @@ public class GateConfig {
         private String host = "localhost";
         /** Redis 端口 */
         private int port = 6379;
+        /** Redis 6+ ACL 用户名；空表示仅密码认证 */
+        private String username = "";
         /** Redis 密码（空字符串表示无密码） */
         private String password = "";
         /** Redis 数据库编号 */
@@ -215,6 +217,8 @@ public class GateConfig {
         public void setHost(String host) { this.host = host; }
         public int getPort() { return port; }
         public void setPort(int port) { this.port = port; }
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
         public int getDatabase() { return database; }

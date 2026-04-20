@@ -9,6 +9,7 @@ import org.springframework.data.redis.connection.RedisSentinelConfiguration;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -51,6 +52,9 @@ public class RedisConfiguration {
             standaloneConfig.setHostName(redis.getHost());
             standaloneConfig.setPort(redis.getPort());
             standaloneConfig.setDatabase(redis.getDatabase());
+            if (redis.getUsername() != null && !redis.getUsername().isEmpty()) {
+                standaloneConfig.setUsername(redis.getUsername());
+            }
             if (redis.getPassword() != null && !redis.getPassword().isEmpty()) {
                 standaloneConfig.setPassword(redis.getPassword());
             }
@@ -75,10 +79,18 @@ public class RedisConfiguration {
         }
 
         config.setDatabase(redis.getDatabase());
+        if (redis.getUsername() != null && !redis.getUsername().isEmpty()) {
+            config.setUsername(redis.getUsername());
+        }
         if (redis.getPassword() != null && !redis.getPassword().isEmpty()) {
             config.setPassword(redis.getPassword());
         }
         return config;
+    }
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
     }
 
     @Bean

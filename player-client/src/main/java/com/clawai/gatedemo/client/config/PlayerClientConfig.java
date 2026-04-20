@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.client.config;
 
+import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -50,11 +51,20 @@ public class PlayerClientConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientConfig.class);
 
+    static {
+        MessageRouteRegistry.loadFromJson("message_registry.json");
+    }
+
     /**
      * 玩家 ID
      * 用于认证和消息标识
      */
     private Long playerId = 100001L;
+
+    /** login-service 签发的 JWT（配置项 {@code player.auth-token} / {@code PLAYER_JWT}） */
+    private String authToken = "";
+
+    private int gameId = 1001;
 
     /**
      * Gate 服务器地址
@@ -91,6 +101,10 @@ public class PlayerClientConfig {
 
     public Long getPlayerId() { return playerId; }
     public void setPlayerId(Long playerId) { this.playerId = playerId; }
+    public String getAuthToken() { return authToken; }
+    public void setAuthToken(String authToken) { this.authToken = authToken; }
+    public int getGameId() { return gameId; }
+    public void setGameId(int gameId) { this.gameId = gameId; }
     public String getHost() { return host; }
     public void setHost(String host) { this.host = host; }
     public int getPort() { return port; }

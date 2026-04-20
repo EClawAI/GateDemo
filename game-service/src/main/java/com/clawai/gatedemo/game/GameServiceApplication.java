@@ -1,5 +1,6 @@
 package com.clawai.gatedemo.game;
 
+import com.clawai.gatedemo.game.service.GameRegistryService;
 import com.clawai.gatedemo.game.service.GameStatus;
 import com.clawai.gatedemo.game.service.GameStatusService;
 import org.slf4j.Logger;
@@ -30,9 +31,12 @@ public class GameServiceApplication implements CommandLineRunner {
     private static final AtomicBoolean running = new AtomicBoolean(true);
 
     private final GameStatusService gameStatusService;
+    private final GameRegistryService gameRegistryService;
 
-    public GameServiceApplication(GameStatusService gameStatusService) {
+    public GameServiceApplication(GameStatusService gameStatusService,
+                                  GameRegistryService gameRegistryService) {
         this.gameStatusService = gameStatusService;
+        this.gameRegistryService = gameRegistryService;
     }
 
     /**
@@ -53,6 +57,9 @@ public class GameServiceApplication implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         gameStatusService.setStatus(GameStatus.STARTED_CAN_LOGIN);
+        // CommandLineRunner 内阻塞会导致 ApplicationReadyEvent 永不发布，须在此显式写 Redis / 注册
+        gameStatusService.activateRedisSyncFromRunner();
+        gameRegistryService.activateRegistryFromRunner();
 
         logger.info("===========================================");
         logger.info("✅ Game 服务已启动（纯 gRPC 模式）");

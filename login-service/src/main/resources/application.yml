@@ -12,9 +12,10 @@ spring:
     name: login-service
   data:
     redis:
-      host: localhost
-      port: 6379
-      password: redistest
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:redistest}
       database: 0
 
 login:
@@ -23,9 +24,10 @@ login:
   server:
     port: 9086
   redis:
-    host: localhost
-    port: 6379
-    password: redistest
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    username: ${REDIS_USERNAME:}
+    password: ${REDIS_PASSWORD:redistest}
     database: 0
   jwt:
     secret: ${JWT_SECRET:DefaultGateDemoSecretKeyForHMACSHA256Auth!}
