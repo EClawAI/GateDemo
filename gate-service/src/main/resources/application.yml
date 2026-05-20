@@ -37,6 +37,10 @@ gate:
     reconnect-max-delay: ${GRPC_RECONNECT_MAX_DELAY:60000}
     reconnect-multiplier: ${GRPC_RECONNECT_MULTIPLIER:2.0}
     heartbeat-interval: ${GRPC_HEARTBEAT_INTERVAL:30000}
+    # icefire-gate 对齐：false=发现到 game 即建 gRPC；true=认证后按需建连
+    lazy-connect: ${GATE_GRPC_LAZY_CONNECT:false}
+    idle-close-seconds: ${GATE_GRPC_IDLE_CLOSE_SECONDS:300}
+    idle-sweep-interval-seconds: ${GATE_GRPC_IDLE_SWEEP_SECONDS:30}
   player:
     heartbeat-interval: 60
   health:

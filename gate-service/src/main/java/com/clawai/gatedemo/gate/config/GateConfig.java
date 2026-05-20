@@ -178,6 +178,17 @@ public class GateConfig {
         private double reconnectMultiplier = 2.0;
         /** 心跳间隔（毫秒） */
         private int heartbeatInterval = 30000;
+        /**
+         * 为 true 时：服务发现只更新 game 元数据，不向 game 建 gRPC；首个需要转发的会话在认证后按需建连。
+         * 对齐 icefire-gate 的 LazyGameConnectionPool 策略。
+         */
+        private boolean lazyConnect = false;
+        /**
+         * 某 game 的 gRPC 连接在引用计数为 0 后持续空闲超过该秒数则关闭（由空闲巡检线程执行）。
+         */
+        private int idleCloseSeconds = 300;
+        /** 空闲连接巡检周期（秒） */
+        private int idleSweepIntervalSeconds = 30;
 
         public long getKeepAliveTime() { return keepAliveTime; }
         public void setKeepAliveTime(long keepAliveTime) { this.keepAliveTime = keepAliveTime; }
@@ -193,6 +204,14 @@ public class GateConfig {
         public void setReconnectMultiplier(double reconnectMultiplier) { this.reconnectMultiplier = reconnectMultiplier; }
         public int getHeartbeatInterval() { return heartbeatInterval; }
         public void setHeartbeatInterval(int heartbeatInterval) { this.heartbeatInterval = heartbeatInterval; }
+        public boolean isLazyConnect() { return lazyConnect; }
+        public void setLazyConnect(boolean lazyConnect) { this.lazyConnect = lazyConnect; }
+        public int getIdleCloseSeconds() { return idleCloseSeconds; }
+        public void setIdleCloseSeconds(int idleCloseSeconds) { this.idleCloseSeconds = idleCloseSeconds; }
+        public int getIdleSweepIntervalSeconds() { return idleSweepIntervalSeconds; }
+        public void setIdleSweepIntervalSeconds(int idleSweepIntervalSeconds) {
+            this.idleSweepIntervalSeconds = idleSweepIntervalSeconds;
+        }
     }
 
     /**

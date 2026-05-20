@@ -205,8 +205,17 @@ public class GameDiscoveryService {
         if (instance == null || !instance.isAvailable()) {
             return;
         }
-
+        if (gateConfig.getGrpcPool().isLazyConnect()) {
+            return;
+        }
         gameGrpcClientPool.addConnection(instance.getId(), instance.getHost(), instance.getPort());
+    }
+
+    /**
+     * 供 {@link com.clawai.gatedemo.gate.grpc.GameGrpcClientPool} 按需建连时查询 Redis 缓存的实例地址。
+     */
+    public GameInstance getGameInstance(int gameId) {
+        return gameMap.get(gameId);
     }
 
     private void disconnectFromGame(int gameId) {

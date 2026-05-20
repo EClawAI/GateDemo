@@ -5,12 +5,12 @@ import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import com.clawai.gatedemo.gate.service.PlayerService;
-import com.clawai.gatedemo.gate.ws.NettyWebSocketServer;
+import com.clawai.gatedemo.gate.transport.GatewayTransport;
+import com.clawai.gatedemo.gate.transport.GatewayTransportRegistry;
 import com.clawai.gatedemo.proto.gate.ServerShutdownNotice;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -19,16 +19,19 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 优雅关闭编排器：停止接受新连接 → 通知玩家 → 等待 drain → 强制关闭。
+ *
+ * <p>B4：通过 {@link GatewayTransportRegistry} 对所有 {@link GatewayTransport} 统一执行
+ * {@code stopAccepting()} 与 {@code stop()}，不再依赖具体 WS / TCP 实现类，
+ * 单个 transport 抛错不影响其它 transport。
  */
 @Component
-@DependsOn("nettyWebSocketServer")
 public class GracefulShutdownManager {
 
     private static final Logger logger = LoggerFactory.getLogger(GracefulShutdownManager.class);
 
     private static final int MSG_ID_SHUTDOWN = MessageRouteRegistry.getIdByName("ServerShutdownNotice");
 
-    private final NettyWebSocketServer nettyWebSocketServer;
+    private final GatewayTransportRegistry transportRegistry;
     private final PlayerService playerService;
 
     @Value("${gate.shutdown.drain-timeout-seconds:30}")
@@ -37,8 +40,8 @@ public class GracefulShutdownManager {
     @Value("${gate.shutdown.enabled:true}")
     private boolean enabled;
 
-    public GracefulShutdownManager(NettyWebSocketServer nettyWebSocketServer, PlayerService playerService) {
-        this.nettyWebSocketServer = nettyWebSocketServer;
+    public GracefulShutdownManager(GatewayTransportRegistry transportRegistry, PlayerService playerService) {
+        this.transportRegistry = transportRegistry;
         this.playerService = playerService;
     }
 
@@ -51,8 +54,15 @@ public class GracefulShutdownManager {
 
         logger.info("=== 开始优雅关闭，drain 超时 {} 秒 ===", drainTimeoutSeconds);
 
-        nettyWebSocketServer.stopAccepting();
-        logger.info("阶段一完成：已停止接受新连接");
+        for (GatewayTransport t : transportRegistry.active()) {
+            try {
+                t.stopAccepting();
+            } catch (Exception e) {
+                logger.warn("transport {}.stopAccepting() 失败: {}", t.name(), e.getMessage(), e);
+            }
+        }
+        logger.info("阶段一完成：已停止接受新连接 (transports={})",
+                transportRegistry.active().stream().map(GatewayTransport::name).toList());
 
         Set<Long> playerIds = playerService.getAllOnlinePlayerIds();
         int count = playerIds.size();
@@ -91,6 +101,14 @@ public class GracefulShutdownManager {
             }
         } else {
             logger.info("阶段二：无活跃玩家，跳过 drain");
+        }
+
+        for (GatewayTransport t : transportRegistry.active()) {
+            try {
+                t.stop();
+            } catch (Exception e) {
+                logger.warn("transport {}.stop() 失败: {}", t.name(), e.getMessage(), e);
+            }
         }
 
         logger.info("=== 优雅关闭编排完成 ===");
