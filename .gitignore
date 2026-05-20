@@ -58,3 +58,7 @@ target/
 
 # Test pipeline output (Markdown 摘要在 docs/test-reports/ 入库；reports/ 全量产物本地保留)
 reports/
+
+# 上方 Python 模板包含的 `lib/` 规则会误命中 scripts/lib/（脚本流水线核心目录），显式放行
+!scripts/lib/
+!scripts/lib/**

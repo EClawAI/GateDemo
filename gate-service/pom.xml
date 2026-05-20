@@ -139,7 +139,52 @@
             <version>1.19.3</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- JMH micro-benchmark (perf profile only; scope=test 避免污染主包) -->
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <version>1.37</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <profiles>
+        <!--
+            性能测试 profile：
+              mvn -Pperf test -pl gate-service -Drun.jmh=true
+            机制：
+              - BenchmarkRunner 通过 JUnit5 委托 org.openjdk.jmh.Runner 跑 *Benchmark 类；
+              - 业务 *Benchmark 类继承 jmh @Benchmark，禁止携带 JUnit @Test（避免被 surefire 直接调用）；
+              - 输出 target/jmh-result.json，由 scripts/run-tests.sh 收集。
+        -->
+        <profile>
+            <id>perf</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/BenchmarkRunner.java</include>
+                            </includes>
+                            <systemPropertyVariables>
+                                <jmh.result.dir>${project.build.directory}</jmh.result.dir>
+                                <run.jmh>true</run.jmh>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <plugins>
@@ -155,7 +200,43 @@
                     </excludes>
                 </configuration>
             </plugin>
-            
+
+            <!--
+                显式声明 maven-compiler-plugin 的 testCompile 启用 JMH annotation processor，
+                否则 *Benchmark 类不会生成 META-INF/BenchmarkList，JMH 启动时报
+                "No benchmarks to run"。
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <testCompilerArgument>-proc:full</testCompilerArgument>
+                    <annotationProcessorPaths>
+                        <!-- 主源不需要 jmh；test 源用 jmh annotation processor 生成 BenchmarkList -->
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                        <configuration>
+                            <annotationProcessorPaths>
+                                <path>
+                                    <groupId>org.openjdk.jmh</groupId>
+                                    <artifactId>jmh-generator-annprocess</artifactId>
+                                    <version>1.37</version>
+                                </path>
+                            </annotationProcessorPaths>
+                            <compilerArgs>
+                                <arg>-proc:full</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Proto compilation moved to common module -->
         </plugins>
     </build>

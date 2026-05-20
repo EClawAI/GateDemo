@@ -257,11 +257,45 @@ mvn clean verify
 # 报告位于各模块 target/site/jacoco/index.html
 ```
 
+## 测试
+
+提供一站式测试流水线脚本，串联**单元测试 + JMH 性能基线 + e2e robot 场景**，并自动归档报告。
+
+```bash
+# 全量（unit + perf + e2e，自动 docker-compose up/down）
+./scripts/run-tests.sh
+
+# 常用组合
+./scripts/run-tests.sh --no-e2e        # 仅 unit + perf（无 docker 依赖）
+./scripts/run-tests.sh --unit-only     # 仅单测 + 覆盖率
+./scripts/run-tests.sh --perf-only     # 仅 JMH
+./scripts/run-tests.sh --e2e-only      # 仅 e2e
+./scripts/run-tests.sh --quick         # 快速反馈（迭代数减少）
+```
+
+**产物**：
+
+- `reports/<ts>/`：surefire HTML / JaCoCo HTML / JMH JSON / maven 原始日志（`.gitignore`）
+- `docs/test-reports/<ts>.md`：Markdown 摘要（**入库**，便于 git diff 追踪基线变化）
+- `reports/<ts>/summary.json`：CI 可读
+
+**新增测试**：
+
+| 类型 | 位置 | 模式 |
+|---|---|---|
+| 单元测试 | `<module>/src/test/java/.../` | 普通 JUnit5；不改脚本 |
+| JMH benchmark | `gate-service/src/test/java/.../perf/*Benchmark.java` | 类名后缀 `Benchmark`，自动发现 |
+| e2e 场景 | `player-client/src/test/java/.../robot/scenarios/Sxx_*Test.java` | 继承 `AbstractRobotScenario` |
+
+详见 [scripts/README.md](scripts/README.md)。
+
 ## 相关文档
 
 - [gRPC 连接池设计](GRPC_POOL_README.md)
 - [开发计划清单](docs/开发计划清单.md)
 - [提案说明文档](docs/提案说明文档.md)
+- [测试流水线指南](scripts/README.md)
+- [Flow 观测性指标](docs/observability-flow-metrics.md)
 
 ---
 
