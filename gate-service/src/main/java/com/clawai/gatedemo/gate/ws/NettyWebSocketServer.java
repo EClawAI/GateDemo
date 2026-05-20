@@ -3,6 +3,9 @@ package com.clawai.gatedemo.gate.ws;
 import com.clawai.gatedemo.gate.config.GateConfig;
 import com.clawai.gatedemo.gate.config.TlsSslContextFactory;
 import com.clawai.gatedemo.gate.handler.GateNettyWebSocketHandler;
+import com.clawai.gatedemo.gate.transport.GatewayTransport;
+import com.clawai.gatedemo.gate.transport.TransportInfo;
+import com.clawai.gatedemo.gate.transport.TransportState;
 import com.clawai.gatedemo.gate.ws.codec.WebSocketBinaryDecoder;
 import com.clawai.gatedemo.gate.ws.codec.WebSocketBinaryEncoder;
 import io.netty.bootstrap.ServerBootstrap;
@@ -23,9 +26,13 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Netty WebSocket 服务器 - Spring管理的服务
+ * Netty WebSocket 服务器 - Spring管理的服务。
+ *
+ * <p>B4：实现 {@link GatewayTransport}，纳入 {@link com.clawai.gatedemo.gate.transport.GatewayTransportRegistry}
+ * 统一管理，{@link #start()} 与 {@link #stop()} 现在均幂等。
  *
  * 职责：
  * 1. 启动Netty服务器，监听WebSocket端口
@@ -38,9 +45,10 @@ import java.util.concurrent.TimeUnit;
  * - @PreDestroy: 停止服务器
  */
 @Component
-public class NettyWebSocketServer {
+public class NettyWebSocketServer implements GatewayTransport {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyWebSocketServer.class);
+    private static final String TRANSPORT_NAME = "websocket";
 
     /** Gate配置 */
     private final GateConfig gateConfig;
@@ -60,6 +68,9 @@ public class NettyWebSocketServer {
     /** 启用 WSS 时非空；纯 WS 时为 null */
     private SslContext sslContext;
 
+    /** 生命周期状态机（{@link GatewayTransport}）。 */
+    private final AtomicReference<TransportState> state = new AtomicReference<>(TransportState.NEW);
+
     /**
      * 构造函数 - Spring自动注入依赖
      */
@@ -68,11 +79,40 @@ public class NettyWebSocketServer {
         this.gateWebSocketHandler = gateWebSocketHandler;
     }
 
+    @Override
+    public String name() {
+        return TRANSPORT_NAME;
+    }
+
+    /** WebSocket 接入始终开启（作为默认主入口），由 server.port 控制。 */
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+
+    @Override
+    public TransportState state() {
+        return state.get();
+    }
+
+    @Override
+    public TransportInfo info() {
+        String scheme = gateConfig.getTls().isEnabled() ? "wss" : "ws";
+        return new TransportInfo(TRANSPORT_NAME, gateConfig.getHost(), gateConfig.getPort(), scheme);
+    }
+
     /**
-     * 启动服务器 - Spring容器初始化完成后自动调用
+     * 启动服务器 - Spring容器初始化完成后自动调用。
+     * <p>幂等：若已 {@link TransportState#RUNNING} 则直接返回，避免重复 bind 同一端口。
      */
+    @Override
     @PostConstruct
     public void start() {
+        if (!state.compareAndSet(TransportState.NEW, TransportState.STARTING)
+                && !state.compareAndSet(TransportState.STOPPED, TransportState.STARTING)) {
+            logger.debug("NettyWebSocketServer.start() ignored, current state={}", state.get());
+            return;
+        }
         logger.info("Starting Netty WebSocket server on port {}", gateConfig.getPort());
 
         if (gateConfig.getTls().isEnabled()) {
@@ -80,6 +120,7 @@ public class NettyWebSocketServer {
                 sslContext = TlsSslContextFactory.buildServerContext(gateConfig.getTls());
                 logger.info("TLS enabled for WebSocket (wss://)");
             } catch (Exception e) {
+                state.set(TransportState.STOPPED);
                 throw new RuntimeException("Failed to initialize TLS for WebSocket", e);
             }
         }
@@ -114,11 +155,13 @@ public class NettyWebSocketServer {
 
             ChannelFuture future = bootstrap.bind(gateConfig.getPort()).sync();
             serverChannel = future.channel();
+            state.set(TransportState.RUNNING);
 
             String scheme = sslContext != null ? "wss" : "ws";
             logger.info("WebSocket server started: {}://0.0.0.0:{}/ws", scheme, gateConfig.getPort());
 
         } catch (Exception e) {
+            state.set(TransportState.STOPPED);
             logger.error("Failed to start WebSocket server: {}", e.getMessage(), e);
             throw new RuntimeException("WebSocket server start failed", e);
         }
@@ -128,18 +171,28 @@ public class NettyWebSocketServer {
      * 停止接受新连接（优雅关闭阶段一）
      * 关闭 server channel 后不再接受新的 TCP 连接
      */
+    @Override
     public void stopAccepting() {
-        if (serverChannel != null && serverChannel.isOpen()) {
-            serverChannel.close();
-            logger.info("WebSocket 服务器已停止接受新连接");
+        if (state.compareAndSet(TransportState.RUNNING, TransportState.STOPPING_ACCEPT)) {
+            if (serverChannel != null && serverChannel.isOpen()) {
+                serverChannel.close();
+                logger.info("WebSocket 服务器已停止接受新连接");
+            }
         }
     }
 
     /**
-     * 停止服务器 - Spring容器关闭前自动调用
+     * 停止服务器 - Spring容器关闭前自动调用。
+     * <p>幂等：若已 {@link TransportState#STOPPED} 则直接返回。
      */
+    @Override
     @PreDestroy
     public void stop() {
+        TransportState prev = state.getAndSet(TransportState.STOPPING);
+        if (prev == TransportState.STOPPED) {
+            state.set(TransportState.STOPPED);
+            return;
+        }
         logger.info("=== 开始关闭 Netty WebSocket 服务器 ===");
 
         if (serverChannel != null) {
@@ -157,6 +210,7 @@ public class NettyWebSocketServer {
             logger.info("Worker 线程组已关闭");
         }
 
+        state.set(TransportState.STOPPED);
         logger.info("✅ Netty WebSocket 服务器已完全关闭");
     }
 }
