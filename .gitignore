@@ -18,6 +18,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv-pdf-translate/
 ENV/
 build/
 develop-eggs/
@@ -54,3 +55,6 @@ logs/
 .DS_Store
 Thumbs.db
 target/
+
+# Test pipeline output (Markdown 摘要在 docs/test-reports/ 入库；reports/ 全量产物本地保留)
+reports/
