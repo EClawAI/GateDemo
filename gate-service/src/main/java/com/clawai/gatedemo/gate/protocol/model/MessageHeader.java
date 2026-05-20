@@ -26,9 +26,21 @@ public class MessageHeader {
     private int messageId;
     private int bodyLength;
     private int requestId;
+    /**
+     * 网关下行单调序号。仅当 {@link #FLAG_HAS_GW_SEQ} 置位时通过线缆传输。
+     * 0 表示「未携带 gwSeq」，与协议默认值一致。
+     */
+    private long gwSeq;
 
     public static final int FLAG_COMPRESSED = 0x8000;
     public static final int FLAG_ENCRYPTED = 0x4000;
+    /**
+     * 置位表示帧体在 16 字节标准头之后、{@code bodyLength} 字节 body 之前，多 8 字节 big-endian
+     * unsigned 64-bit {@code gwSeq}。仅当客户端在 AUTH 阶段声明
+     * {@code client_features.supports_gw_seq} 时，服务端才会 stamp 该位。详见
+     * {@code openspec/changes/add-flow-downstream-buffer/design.md} §2。
+     */
+    public static final int FLAG_HAS_GW_SEQ = 0x2000;
     public static final int FLAG_MASK_MODE = 0x00C0;
 
     public static final short MODE_REQUEST = 0x0000;
@@ -66,6 +78,18 @@ public class MessageHeader {
         }
     }
 
+    public boolean hasGwSeq() {
+        return (flags & FLAG_HAS_GW_SEQ) != 0;
+    }
+
+    public void setHasGwSeq(boolean hasGwSeq) {
+        if (hasGwSeq) {
+            flags |= FLAG_HAS_GW_SEQ;
+        } else {
+            flags &= ~FLAG_HAS_GW_SEQ;
+        }
+    }
+
     public short getMode() {
         return (short) (flags & FLAG_MASK_MODE);
     }
@@ -89,6 +113,9 @@ public class MessageHeader {
     public int getRequestId() { return requestId; }
     public void setRequestId(int requestId) { this.requestId = requestId; }
 
+    public long getGwSeq() { return gwSeq; }
+    public void setGwSeq(long gwSeq) { this.gwSeq = gwSeq; }
+
     @Override
     public String toString() {
         String modeStr = switch (getMode()) {
@@ -97,7 +124,7 @@ public class MessageHeader {
             case MODE_PUSH -> "PUSH";
             default -> "UNKNOWN";
         };
-        return String.format("MessageHeader[flags=0x%04X, seq=%d, msgId=%d, bodyLen=%d, reqId=%d, mode=%s]",
-                flags & 0xFFFF, sequence & 0xFFFF, messageId, bodyLength, requestId, modeStr);
+        return String.format("MessageHeader[flags=0x%04X, seq=%d, msgId=%d, bodyLen=%d, reqId=%d, gwSeq=%d, mode=%s]",
+                flags & 0xFFFF, sequence & 0xFFFF, messageId, bodyLength, requestId, gwSeq, modeStr);
     }
 }

@@ -41,6 +41,13 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
             return;
         }
 
+        boolean hasGwSeq = (flags & MessageHeader.FLAG_HAS_GW_SEQ) != 0;
+        if (hasGwSeq && in.readableBytes() < 8) {
+            in.resetReaderIndex();
+            return;
+        }
+        long gwSeq = hasGwSeq ? in.readLong() : 0L;
+
         if (in.readableBytes() < bodyLength) {
             in.resetReaderIndex();
             return;
@@ -52,6 +59,7 @@ public class ClientMessageDecoder extends ByteToMessageDecoder {
         header.setMessageId(messageId);
         header.setBodyLength(bodyLength);
         header.setRequestId(requestId);
+        header.setGwSeq(gwSeq);
 
         byte[] bodyBytes = new byte[0];
         if (bodyLength > 0) {

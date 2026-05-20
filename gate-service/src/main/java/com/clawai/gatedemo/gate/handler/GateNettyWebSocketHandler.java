@@ -2,12 +2,17 @@ package com.clawai.gatedemo.gate.handler;
 
 import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.gate.auth.TokenValidator;
+import com.clawai.gatedemo.gate.flow.FlowResumeOutcome;
+import com.clawai.gatedemo.gate.flow.FlowSession;
+import com.clawai.gatedemo.gate.flow.FlowSessionManager;
 import com.clawai.gatedemo.gate.protocol.model.MessageHeader;
 import com.clawai.gatedemo.gate.protocol.model.RawMessageBody;
 import com.clawai.gatedemo.gate.protocol.model.WrappedMessage;
 import com.clawai.gatedemo.gate.resilience.CircuitBreaker;
 import com.clawai.gatedemo.gate.resilience.ConnectionLimiter;
 import com.clawai.gatedemo.gate.resilience.RateLimiter;
+import com.clawai.gatedemo.gate.config.GateConfig;
+import com.clawai.gatedemo.gate.grpc.GameGrpcClientPool;
 import com.clawai.gatedemo.gate.route.GameServiceRouter;
 import com.clawai.gatedemo.gate.route.ServiceRouter;
 import com.clawai.gatedemo.gate.route.ServiceRouterManager;
@@ -15,8 +20,10 @@ import com.clawai.gatedemo.gate.security.MessageValidator;
 import com.clawai.gatedemo.gate.service.PlayerService;
 import com.clawai.gatedemo.proto.gate.AuthRequest;
 import com.clawai.gatedemo.proto.gate.AuthResponse;
+import com.clawai.gatedemo.proto.gate.ClientHeartbeat;
 import com.clawai.gatedemo.proto.gate.ErrorResponse;
 import com.clawai.gatedemo.proto.gate.HeartbeatAck;
+import com.clawai.gatedemo.proto.gate.ResumeStatus;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -59,6 +66,11 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
     private final CircuitBreaker grpcCircuitBreaker;
     private final ConnectionLimiter connectionLimiter;
     private final ServiceRouterManager routerManager;
+    private final GateConfig gateConfig;
+    private final GameGrpcClientPool gameGrpcClientPool;
+    private final FlowSessionManager flowSessionManager;
+    /** B3：NEW 首登时 drain 兜底 stream + 触发 RELOGIN 阈值；setter 注入，避免循环依赖。 */
+    private com.clawai.gatedemo.gate.service.OfflineMessageService offlineMessageService;
 
     public GateNettyWebSocketHandler(PlayerService playerService,
                                      TokenValidator tokenValidator,
@@ -67,7 +79,10 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
                                      @org.springframework.beans.factory.annotation.Qualifier("globalRateLimiter") RateLimiter globalRateLimiter,
                                      CircuitBreaker grpcCircuitBreaker,
                                      ConnectionLimiter connectionLimiter,
-                                     ServiceRouterManager routerManager) {
+                                     ServiceRouterManager routerManager,
+                                     GateConfig gateConfig,
+                                     GameGrpcClientPool gameGrpcClientPool,
+                                     FlowSessionManager flowSessionManager) {
         this.playerService = playerService;
         this.tokenValidator = tokenValidator;
         this.messageValidator = messageValidator;
@@ -76,6 +91,16 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         this.grpcCircuitBreaker = grpcCircuitBreaker;
         this.connectionLimiter = connectionLimiter;
         this.routerManager = routerManager;
+        this.gateConfig = gateConfig;
+        this.gameGrpcClientPool = gameGrpcClientPool;
+        this.flowSessionManager = flowSessionManager;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setOfflineMessageService(
+            @org.springframework.context.annotation.Lazy
+            com.clawai.gatedemo.gate.service.OfflineMessageService offlineMessageService) {
+        this.offlineMessageService = offlineMessageService;
     }
 
     @Override
@@ -194,6 +219,18 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
 
             String token = authReq.getToken();
             int gameId = authReq.getGameId();
+            String clientFlowId = authReq.getFlowId();
+            long lastClientRecvSeq = authReq.getLastClientRecvSeq();
+            int clientFeatures = authReq.getClientFeatures();
+
+            if (gameId <= 0) {
+                logger.warn("认证失败：无效 gameId from {}", ctx.channel().remoteAddress());
+                AuthResponse resp = AuthResponse.newBuilder()
+                        .setSuccess(false).setMessage("Invalid game id").build();
+                sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+                ctx.close();
+                return;
+            }
 
             Long playerId = tokenValidator.validate(token);
             if (playerId == null) {
@@ -205,26 +242,24 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
                 return;
             }
 
-            // 顶号
-            if (playerService.hasPlayer(playerId)) {
-                Channel oldChannel = playerService.getPlayerChannel(playerId);
-                if (oldChannel != null && oldChannel.isActive()) {
-                    logger.warn("玩家 {} 已登录，关闭旧连接", playerId);
-                    oldChannel.close();
-                }
-                playerService.unregisterPlayer(playerId);
+            if (gateConfig.getGrpcPool().isLazyConnect()) {
+                gameGrpcClientPool.ensureConnectedAsync(gameId).thenAcceptAsync(ok -> {
+                    if (Boolean.FALSE.equals(ok)) {
+                        logger.warn("认证失败：无法连接 game {} from {}", gameId, ctx.channel().remoteAddress());
+                        AuthResponse resp = AuthResponse.newBuilder()
+                                .setSuccess(false).setMessage("Game unavailable").build();
+                        sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+                        ctx.close();
+                        return;
+                    }
+                    gameGrpcClientPool.acquireRef(gameId);
+                    finishAuthAndRespond(ctx, reqHeader, playerId, gameId, clientFlowId, lastClientRecvSeq, clientFeatures);
+                }, ctx.channel().eventLoop());
+                return;
             }
 
-            ctx.channel().attr(PlayerService.PLAYER_ID_KEY).set(playerId);
-            ctx.channel().attr(AUTHENTICATED).set(true);
-            ctx.channel().attr(GameServiceRouter.GAME_ID_KEY).set(gameId);
-
-            playerService.registerPlayer(playerId, ctx.channel());
-            logger.info("玩家 {} 认证成功, gameId={}", playerId, gameId);
-
-            AuthResponse resp = AuthResponse.newBuilder()
-                    .setSuccess(true).setPlayerId(playerId).setMessage("OK").build();
-            sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+            gameGrpcClientPool.acquireRef(gameId);
+            finishAuthAndRespond(ctx, reqHeader, playerId, gameId, clientFlowId, lastClientRecvSeq, clientFeatures);
 
         } catch (Exception e) {
             logger.error("认证消息解析失败: {}", e.getMessage());
@@ -232,18 +267,107 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
         }
     }
 
+    /**
+     * AUTH 完成路径：按 {@code clientFlowId} 是否为空分叉 NEW / RESUME；RESUME 失败自动降级为 NEW
+     * 并在响应中保留拒绝原因（{@code resume_status}）。B1 起：透传 client_features，回写 server_features。
+     */
+    private void finishAuthAndRespond(ChannelHandlerContext ctx, MessageHeader reqHeader,
+                                      Long playerId, int gameId,
+                                      String clientFlowId, long lastClientRecvSeq,
+                                      int clientFeatures) {
+        FlowSession session;
+        ResumeStatus statusForResp;
+        FlowResumeOutcome rejectReason = null;
+
+        if (clientFlowId == null || clientFlowId.isBlank()) {
+            session = flowSessionManager.newFlow(playerId, gameId, ctx.channel(), clientFeatures);
+            statusForResp = ResumeStatus.NEW;
+        } else {
+            FlowSessionManager.ResumeResult result =
+                    flowSessionManager.resume(clientFlowId, playerId, lastClientRecvSeq, ctx.channel(), clientFeatures);
+            if (result.isResumed()) {
+                session = result.session();
+                statusForResp = ResumeStatus.RESUMED;
+            } else {
+                rejectReason = result.outcome();
+                session = flowSessionManager.newFlowAfterReject(playerId, gameId, ctx.channel(), rejectReason, clientFeatures);
+                statusForResp = toProtoStatus(rejectReason);
+            }
+        }
+
+        ctx.channel().attr(PlayerService.PLAYER_ID_KEY).set(playerId);
+        ctx.channel().attr(AUTHENTICATED).set(true);
+        ctx.channel().attr(GameServiceRouter.GAME_ID_KEY).set(gameId);
+        playerService.registerPlayer(playerId, ctx.channel());
+
+        int negotiatedFeatures = session.getFeatures();
+        if (statusForResp == ResumeStatus.RESUMED) {
+            logger.info("玩家 {} RESUME 成功, flowId={}, gameId={}, features=0x{}",
+                    playerId, session.getFlowId(), gameId, Integer.toHexString(negotiatedFeatures));
+        } else if (rejectReason != null) {
+            logger.info("玩家 {} RESUME 失败降级 NEW（{}）, newFlowId={}, gameId={}, features=0x{}",
+                    playerId, rejectReason, session.getFlowId(), gameId, Integer.toHexString(negotiatedFeatures));
+        } else {
+            logger.info("玩家 {} NEW 认证成功, flowId={}, gameId={}, features=0x{}",
+                    playerId, session.getFlowId(), gameId, Integer.toHexString(negotiatedFeatures));
+        }
+
+        AuthResponse resp = AuthResponse.newBuilder()
+                .setSuccess(true)
+                .setPlayerId(playerId)
+                .setMessage("OK")
+                .setFlowId(session.getFlowId())
+                .setResumeStatus(statusForResp)
+                .setServerFeatures(negotiatedFeatures)
+                .build();
+        sendResponse(ctx, reqHeader, MSG_ID_AUTH, MessageHeader.MODE_RESPONSE, resp.toByteArray());
+
+        // B3：NEW 首登时 drain 兜底 stream + 检查 RELOGIN 阈值（RESUMED 路径由 manager 在 resume 内合流）
+        if (offlineMessageService != null && statusForResp != ResumeStatus.RESUMED) {
+            try {
+                offlineMessageService.onPlayerOnline(playerId, ctx.channel());
+            } catch (Throwable t) {
+                logger.warn("OfflineMessageService.onPlayerOnline failed playerId={}: {}", playerId, t.getMessage());
+            }
+        }
+    }
+
+    private static ResumeStatus toProtoStatus(FlowResumeOutcome outcome) {
+        return switch (outcome) {
+            case RESUMED -> ResumeStatus.RESUMED;
+            case REJECTED_EXPIRED -> ResumeStatus.REJECTED_EXPIRED;
+            case REJECTED_MISMATCH -> ResumeStatus.REJECTED_MISMATCH;
+            case REJECTED_OWNER_OTHER -> ResumeStatus.REJECTED_OWNER_OTHER;
+            case NEW -> ResumeStatus.NEW;
+        };
+    }
+
     private void handleHeartbeat(ChannelHandlerContext ctx, MessageHeader reqHeader,
                                   WrappedMessage message) {
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
-        if (playerId != null) {
-            playerService.renewHeartbeat(playerId);
+        if (playerId == null) return;
 
-            HeartbeatAck ack = HeartbeatAck.newBuilder()
-                    .setServerTime(System.currentTimeMillis()).build();
-            sendResponse(ctx, reqHeader, MSG_ID_HEARTBEAT_ACK, MessageHeader.MODE_RESPONSE, ack.toByteArray());
+        playerService.renewHeartbeat(playerId);
 
-            logger.debug("玩家 {} 心跳续期", playerId);
+        // B1：客户端心跳里捎带 last_client_recv_seq，用于裁剪 DownstreamBuffer / 续写锚点。
+        try {
+            byte[] body = message.getBody() != null ? message.getBody().toBytes() : null;
+            if (body != null && body.length > 0) {
+                ClientHeartbeat hb = ClientHeartbeat.parseFrom(body);
+                long ack = hb.getLastClientRecvSeq();
+                if (ack > 0) {
+                    flowSessionManager.ackSeq(playerId, ack);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("ClientHeartbeat 解析失败 playerId={}: {}", playerId, e.getMessage());
         }
+
+        HeartbeatAck ack = HeartbeatAck.newBuilder()
+                .setServerTime(System.currentTimeMillis()).build();
+        sendResponse(ctx, reqHeader, MSG_ID_HEARTBEAT_ACK, MessageHeader.MODE_RESPONSE, ack.toByteArray());
+
+        logger.debug("玩家 {} 心跳续期", playerId);
     }
 
     @Override
@@ -264,10 +388,17 @@ public class GateNettyWebSocketHandler extends SimpleChannelInboundHandler<Wrapp
             connectionLimiter.release();
         }
 
+        Integer gameId = ctx.channel().attr(GameServiceRouter.GAME_ID_KEY).get();
+        if (gameId != null) {
+            gameGrpcClientPool.releaseRef(gameId);
+        }
+
+        // FlowSession 处理：进入 DETACHED 等待 RESUME 窗口（design.md §4），
+        // 而不是直接 destroy + 触发离线消息路径。超 TTL 由 FlowSessionManager 扫描清理。
         Long playerId = ctx.channel().attr(PlayerService.PLAYER_ID_KEY).get();
         if (playerId != null) {
-            playerService.unregisterPlayer(playerId);
-            logger.info("玩家 {} 断开连接", playerId);
+            flowSessionManager.markDetached(ctx.channel());
+            logger.info("玩家 {} Channel 关闭，等待 RESUME 或 TTL 销毁", playerId);
         }
 
         logger.info("连接关闭：{}", ctx.channel().remoteAddress());

@@ -10,9 +10,11 @@ public class MessageHeader {
     private int messageId;
     private int bodyLength;
     private int requestId;
+    private long gwSeq;
 
     public static final int FLAG_COMPRESSED = 0x8000;
     public static final int FLAG_ENCRYPTED = 0x4000;
+    public static final int FLAG_HAS_GW_SEQ = 0x2000;
     public static final int FLAG_MASK_MODE = 0x00C0;
 
     public static final short MODE_REQUEST = 0x0000;
@@ -73,6 +75,21 @@ public class MessageHeader {
     public int getRequestId() { return requestId; }
     public void setRequestId(int requestId) { this.requestId = requestId; }
 
+    public long getGwSeq() { return gwSeq; }
+    public void setGwSeq(long gwSeq) { this.gwSeq = gwSeq; }
+
+    public boolean hasGwSeq() {
+        return (flags & FLAG_HAS_GW_SEQ) != 0;
+    }
+
+    public void setHasGwSeq(boolean hasGwSeq) {
+        if (hasGwSeq) {
+            flags |= FLAG_HAS_GW_SEQ;
+        } else {
+            flags &= ~FLAG_HAS_GW_SEQ;
+        }
+    }
+
     @Override
     public String toString() {
         return "MessageHeader{" +
@@ -81,6 +98,7 @@ public class MessageHeader {
                 ", messageId=" + messageId +
                 ", bodyLength=" + bodyLength +
                 ", requestId=" + requestId +
+                ", gwSeq=" + gwSeq +
                 '}';
     }
 }

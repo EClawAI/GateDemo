@@ -1,11 +1,14 @@
 package com.clawai.gatedemo.client.service;
 
 import com.clawai.gatedemo.client.config.PlayerConfig;
+import com.clawai.gatedemo.client.flow.FlowSessionStore;
+import com.clawai.gatedemo.client.protocol.model.MessageHeader;
 import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.proto.gate.AuthRequest;
 import com.clawai.gatedemo.proto.gate.AuthResponse;
 import com.clawai.gatedemo.proto.gate.ClientHeartbeat;
 import com.clawai.gatedemo.proto.gate.HeartbeatAck;
+import com.clawai.gatedemo.proto.gate.ResumeStatus;
 import com.clawai.gatedemo.proto.game.CgBattleMove;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -35,14 +38,20 @@ public class PlayerClientService {
     private static final Logger logger = LoggerFactory.getLogger(PlayerClientService.class);
 
     private static final int HEADER_SIZE = 16;
+    /** B1 client_features: bit0 supports_gw_seq | bit1 supports_resume_replay. */
+    private static final int CLIENT_FEATURES = 0x3;
 
     private final PlayerConfig playerConfig;
+    private final FlowSessionStore flowSessionStore;
     private final ReactorNettyWebSocketClient webSocketClient = new ReactorNettyWebSocketClient();
     private CountDownLatch latch;
     private WebSocketSession currentSession;
+    /** B1: 服务端协商后实际启用的 server_features，决定后续解码行为。 */
+    private volatile int serverFeatures = 0;
 
-    public PlayerClientService(PlayerConfig playerConfig) {
+    public PlayerClientService(PlayerConfig playerConfig, FlowSessionStore flowSessionStore) {
         this.playerConfig = playerConfig;
+        this.flowSessionStore = flowSessionStore;
     }
 
     public void connect() {
@@ -82,13 +91,24 @@ public class PlayerClientService {
                 logger.error("未配置 JWT：请设置 player.auth-token 或环境变量 PLAYER_JWT（login-service POST /api/v1/login 返回的 token）");
                 return;
             }
-            AuthRequest authReq = AuthRequest.newBuilder()
+            String savedFlowId = flowSessionStore.getFlowId();
+            long savedSeq = flowSessionStore.getLastClientRecvSeq();
+            AuthRequest.Builder builder = AuthRequest.newBuilder()
                     .setToken(token)
                     .setGameId(playerConfig.getGameId())
-                    .build();
+                    .setLastClientRecvSeq(savedSeq)
+                    .setClientFeatures(CLIENT_FEATURES);
+            if (savedFlowId != null && !savedFlowId.isBlank()) {
+                builder.setFlowId(savedFlowId);
+            }
+            AuthRequest authReq = builder.build();
 
             sendBinaryMessage(session, MessageRouteRegistry.getIdByName("AuthRequest"), 0x0000, authReq.toByteArray());
-            logger.info("Auth message sent (binary), gameId={}", playerConfig.getGameId());
+            logger.info("Auth message sent (binary), gameId={}, flowId={}, lastClientRecvSeq={}, clientFeatures=0x{}",
+                    playerConfig.getGameId(),
+                    savedFlowId == null || savedFlowId.isBlank() ? "<empty:NEW>" : savedFlowId,
+                    savedSeq,
+                    Integer.toHexString(CLIENT_FEATURES));
         } catch (Exception e) {
             logger.error("Failed to send auth: {}", e.getMessage());
         }
@@ -101,9 +121,11 @@ public class PlayerClientService {
                     Thread.sleep(playerConfig.getHeartbeatInterval() * 1000L);
                     if (currentSession != null && currentSession.isOpen()) {
                         ClientHeartbeat hb = ClientHeartbeat.newBuilder()
-                                .setTimestamp(System.currentTimeMillis()).build();
+                                .setTimestamp(System.currentTimeMillis())
+                                .setLastClientRecvSeq(flowSessionStore.getLastClientRecvSeq())
+                                .build();
                         sendBinaryMessage(session, MessageRouteRegistry.getIdByName("ClientHeartbeat"), 0, hb.toByteArray());
-                        logger.debug("Heartbeat sent (binary)");
+                        logger.debug("Heartbeat sent (binary), lastClientRecvSeq={}", flowSessionStore.getLastClientRecvSeq());
                     }
                 } catch (InterruptedException e) {
                     break;
@@ -130,17 +152,41 @@ public class PlayerClientService {
             int bodyLength = bb.getInt();
             int requestId = bb.getInt();
 
+            boolean hasGwSeq = (flags & MessageHeader.FLAG_HAS_GW_SEQ) != 0;
+            long gwSeq = 0L;
+            if (hasGwSeq) {
+                if (bb.remaining() < 8) {
+                    logger.warn("FLAG_HAS_GW_SEQ 置位但帧长不足 gwSeq 字段");
+                    return;
+                }
+                gwSeq = bb.getLong();
+            }
+
             byte[] bodyBytes = new byte[0];
             if (bodyLength > 0 && bb.remaining() >= bodyLength) {
                 bodyBytes = new byte[bodyLength];
                 bb.get(bodyBytes);
             }
 
-            // Gate 对 Auth 的应答复用与请求相同的 messageId（见 GateNettyWebSocketHandler#handleAuth）
+            if (hasGwSeq && gwSeq > flowSessionStore.getLastClientRecvSeq()) {
+                flowSessionStore.update(flowSessionStore.getFlowId(), gwSeq);
+            }
+
             if (messageId == MessageRouteRegistry.getIdByName("AuthRequest")) {
                 AuthResponse resp = AuthResponse.parseFrom(bodyBytes);
                 if (resp.getSuccess()) {
-                    logger.info("Authentication successful! playerId={}", resp.getPlayerId());
+                    ResumeStatus status = resp.getResumeStatus();
+                    String newFlowId = resp.getFlowId();
+                    int negotiated = resp.getServerFeatures();
+                    serverFeatures = negotiated;
+                    logger.info("Authentication successful! playerId={}, flowId={}, status={}, serverFeatures=0x{}",
+                            resp.getPlayerId(), newFlowId, status.name(), Integer.toHexString(negotiated));
+                    flowSessionStore.update(newFlowId, flowSessionStore.getLastClientRecvSeq());
+                    if (status == ResumeStatus.REJECTED_EXPIRED
+                            || status == ResumeStatus.REJECTED_MISMATCH
+                            || status == ResumeStatus.REJECTED_OWNER_OTHER) {
+                        logger.warn("RESUME 被拒（{}），已自动降级为 NEW；客户端可考虑重发未确认请求", status);
+                    }
                 } else {
                     logger.warn("Authentication failed: {}", resp.getMessage());
                 }
@@ -198,9 +244,11 @@ public class PlayerClientService {
     private void sendHeartbeatManual() {
         try {
             ClientHeartbeat hb = ClientHeartbeat.newBuilder()
-                    .setTimestamp(System.currentTimeMillis()).build();
+                    .setTimestamp(System.currentTimeMillis())
+                    .setLastClientRecvSeq(flowSessionStore.getLastClientRecvSeq())
+                    .build();
             sendBinaryMessage(currentSession, MessageRouteRegistry.getIdByName("ClientHeartbeat"), 0, hb.toByteArray());
-            logger.info("Heartbeat sent");
+            logger.info("Heartbeat sent, lastClientRecvSeq={}", flowSessionStore.getLastClientRecvSeq());
         } catch (Exception e) {
             logger.error("Failed to send heartbeat: {}", e.getMessage());
         }

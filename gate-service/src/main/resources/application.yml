@@ -43,6 +43,44 @@ gate:
     idle-sweep-interval-seconds: ${GATE_GRPC_IDLE_SWEEP_SECONDS:30}
   player:
     heartbeat-interval: 60
+  flow:
+    detached-ttl-seconds: ${GATE_FLOW_DETACHED_TTL_SECONDS:60}
+    max-ttl-seconds: ${GATE_FLOW_MAX_TTL_SECONDS:86400}
+    renewal-interval-seconds: ${GATE_FLOW_RENEWAL_INTERVAL_SECONDS:15}
+    detached-scan-interval-seconds: ${GATE_FLOW_DETACHED_SCAN_INTERVAL_SECONDS:5}
+    redis-key-prefix: ${GATE_FLOW_REDIS_KEY_PREFIX:gate:flow:}
+    # B1: downstream buffer + gwSeq replay
+    buffer:
+      enabled: ${GATE_FLOW_BUFFER_ENABLED:true}
+      capacity-entries: ${GATE_FLOW_BUFFER_CAPACITY_ENTRIES:256}
+      capacity-bytes: ${GATE_FLOW_BUFFER_CAPACITY_BYTES:4194304}
+      overflow-policy: ${GATE_FLOW_BUFFER_OVERFLOW_POLICY:drop_oldest}
+    features:
+      advertise-gw-seq: ${GATE_FLOW_FEATURES_GW_SEQ:true}
+      advertise-replay: ${GATE_FLOW_FEATURES_REPLAY:true}
+    # B2: cross-instance owner takeover + Pub/Sub eviction
+    cross:
+      enabled: ${GATE_FLOW_CROSS_ENABLED:true}
+      evict-channel: ${GATE_FLOW_CROSS_EVICT_CHANNEL:gate:flow:evict}
+      publish-self-evict: ${GATE_FLOW_CROSS_PUBLISH_SELF:false}
+    # B3: offline message merge policy
+    offline:
+      enabled: ${GATE_FLOW_OFFLINE_ENABLED:true}
+      retention-days: ${GATE_FLOW_OFFLINE_RETENTION_DAYS:7}
+      relogin-threshold: ${GATE_FLOW_OFFLINE_RELOGIN_THRESHOLD:200}
+      replay-batch-size: ${GATE_FLOW_OFFLINE_REPLAY_BATCH:100}
+      flush-on-destroy: ${GATE_FLOW_OFFLINE_FLUSH_ON_DESTROY:true}
+      flush-on-cross-evict: ${GATE_FLOW_OFFLINE_FLUSH_ON_CROSS_EVICT:true}
+    # Observability: 跨实例 takeover / RESUME 分桶指标 + cross logger
+    observability:
+      enabled: ${GATE_FLOW_OBSERVABILITY_ENABLED:true}
+      takeover-total-enabled: ${GATE_FLOW_OBSERVABILITY_TAKEOVER_TOTAL_ENABLED:true}
+      resume-total-enabled: ${GATE_FLOW_OBSERVABILITY_RESUME_TOTAL_ENABLED:true}
+      replay-total-enabled: ${GATE_FLOW_OBSERVABILITY_REPLAY_TOTAL_ENABLED:true}
+      latency-enabled: ${GATE_FLOW_OBSERVABILITY_LATENCY_ENABLED:true}
+      cross-logger-enabled: ${GATE_FLOW_OBSERVABILITY_CROSS_LOGGER_ENABLED:true}
+      histogram-slo: ${GATE_FLOW_OBSERVABILITY_HISTOGRAM_SLO:10ms,25ms,50ms,100ms,250ms,500ms,1s,2s,5s}
+      resume-timeout-ms: ${GATE_FLOW_OBSERVABILITY_RESUME_TIMEOUT_MS:3000}
   health:
     port: ${HEALTH_PORT:8890}
   jwt:

@@ -50,6 +50,14 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
             return;
         }
 
+        boolean hasGwSeq = (flags & MessageHeader.FLAG_HAS_GW_SEQ) != 0;
+        if (hasGwSeq && in.readableBytes() < 8) {
+            logger.error("FLAG_HAS_GW_SEQ 置位但帧数据不足 8 字节 gwSeq");
+            ctx.close();
+            return;
+        }
+        long gwSeq = hasGwSeq ? in.readLong() : 0L;
+
         if (in.readableBytes() < bodyLength) {
             logger.error("帧数据不完整: 期望 {} bytes body, 实际 {}", bodyLength, in.readableBytes());
             ctx.close();
@@ -62,6 +70,7 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
         header.setMessageId(messageId);
         header.setBodyLength(bodyLength);
         header.setRequestId(requestId);
+        header.setGwSeq(gwSeq);
 
         byte[] bodyBytes = new byte[0];
         if (bodyLength > 0) {

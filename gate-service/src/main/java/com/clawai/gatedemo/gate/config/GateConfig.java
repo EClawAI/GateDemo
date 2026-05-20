@@ -39,6 +39,8 @@ public class GateConfig {
     private TcpConfig tcp = new TcpConfig();
     /** 集群配置 */
     private ClusterConfig cluster = new ClusterConfig();
+    /** Flow（双层 Session 模型）配置 */
+    private FlowConfig flow = new FlowConfig();
 
     /**
      * TCP 端口配置
@@ -295,4 +297,202 @@ public class GateConfig {
     public void setTcp(TcpConfig tcp) { this.tcp = tcp; }
     public ClusterConfig getCluster() { return cluster; }
     public void setCluster(ClusterConfig cluster) { this.cluster = cluster; }
+    public FlowConfig getFlow() { return flow; }
+    public void setFlow(FlowConfig flow) { this.flow = flow; }
+
+    /**
+     * FlowSession（双层 Session 模型）相关配置。
+     * <p>详见 {@code openspec/changes/add-netun-resume-flow-session/design.md} §4-§5。
+     */
+    public static class FlowConfig {
+        /** DETACHED 后允许 RESUME 的最大秒数；超时则销毁 flow */
+        private int detachedTtlSeconds = 60;
+        /** Flow 自创建起的最大总寿命（秒）；用于兜底防止 Redis 漂泊 */
+        private long maxTtlSeconds = 24L * 60L * 60L;
+        /** ATTACHED 状态下网关续期 expiresAt 的间隔（秒） */
+        private int renewalIntervalSeconds = 15;
+        /** DETACHED 超时扫描间隔（秒） */
+        private int detachedScanIntervalSeconds = 5;
+        /** Redis Key 前缀，单独可配便于多实例 / 测试隔离 */
+        private String redisKeyPrefix = "gate:flow:";
+        /** B1：下行 buffer 配置 */
+        private BufferConfig buffer = new BufferConfig();
+        /** B1：服务端 features 通告配置 */
+        private FeaturesConfig features = new FeaturesConfig();
+        /** B2：跨实例 owner 迁移 + Pub/Sub eviction 配置 */
+        private CrossConfig cross = new CrossConfig();
+        /** B3：离线消息合流策略配置 */
+        private OfflineConfig offline = new OfflineConfig();
+        /** Observability：跨实例 takeover / resume 分桶指标 + cross logger 配置 */
+        private ObservabilityConfig observability = new ObservabilityConfig();
+
+        public int getDetachedTtlSeconds() { return detachedTtlSeconds; }
+        public void setDetachedTtlSeconds(int detachedTtlSeconds) { this.detachedTtlSeconds = detachedTtlSeconds; }
+        public long getMaxTtlSeconds() { return maxTtlSeconds; }
+        public void setMaxTtlSeconds(long maxTtlSeconds) { this.maxTtlSeconds = maxTtlSeconds; }
+        public int getRenewalIntervalSeconds() { return renewalIntervalSeconds; }
+        public void setRenewalIntervalSeconds(int renewalIntervalSeconds) {
+            this.renewalIntervalSeconds = renewalIntervalSeconds;
+        }
+        public int getDetachedScanIntervalSeconds() { return detachedScanIntervalSeconds; }
+        public void setDetachedScanIntervalSeconds(int detachedScanIntervalSeconds) {
+            this.detachedScanIntervalSeconds = detachedScanIntervalSeconds;
+        }
+        public String getRedisKeyPrefix() { return redisKeyPrefix; }
+        public void setRedisKeyPrefix(String redisKeyPrefix) { this.redisKeyPrefix = redisKeyPrefix; }
+        public BufferConfig getBuffer() { return buffer; }
+        public void setBuffer(BufferConfig buffer) { this.buffer = buffer == null ? new BufferConfig() : buffer; }
+        public FeaturesConfig getFeatures() { return features; }
+        public void setFeatures(FeaturesConfig features) { this.features = features == null ? new FeaturesConfig() : features; }
+        public CrossConfig getCross() { return cross; }
+        public void setCross(CrossConfig cross) { this.cross = cross == null ? new CrossConfig() : cross; }
+        public OfflineConfig getOffline() { return offline; }
+        public void setOffline(OfflineConfig offline) { this.offline = offline == null ? new OfflineConfig() : offline; }
+        public ObservabilityConfig getObservability() { return observability; }
+        public void setObservability(ObservabilityConfig observability) {
+            this.observability = observability == null ? new ObservabilityConfig() : observability;
+        }
+    }
+
+    /**
+     * Observability：跨实例 takeover / RESUME / replay 分桶指标 + 跨实例事件 logger 控制。
+     * <p>详见 {@code openspec/changes/add-flow-observability-buckets/design.md}.
+     *
+     * <p>所有 sub-switch 在 {@link #enabled} 为 false 时整体失效（master kill switch）。
+     * sub-switch 为 false 时对应 Meter 不注册（hot path 零开销）。
+     */
+    public static class ObservabilityConfig {
+        /** Master switch；false 时所有 sub-switch 失效。 */
+        private boolean enabled = true;
+        /** {@code gate_flow_takeover_total} */
+        private boolean takeoverTotalEnabled = true;
+        /** {@code gate_flow_resume_total} */
+        private boolean resumeTotalEnabled = true;
+        /** {@code gate_flow_replay_total} */
+        private boolean replayTotalEnabled = true;
+        /** 两个 latency Timer */
+        private boolean latencyEnabled = true;
+        /** {@code gate.cross.event} 顶层 logger */
+        private boolean crossLoggerEnabled = true;
+        /** SLO bucket 列表（逗号分隔，支持 ms/s 后缀）；默认 10ms,25ms,50ms,100ms,250ms,500ms,1s,2s,5s. */
+        private String histogramSlo = "10ms,25ms,50ms,100ms,250ms,500ms,1s,2s,5s";
+        /** RESUME 总耗时超过此阈值则 emit outcome=timeout（与 succeeded 互斥）。 */
+        private long resumeTimeoutMs = 3000L;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public boolean isTakeoverTotalEnabled() { return takeoverTotalEnabled; }
+        public void setTakeoverTotalEnabled(boolean takeoverTotalEnabled) {
+            this.takeoverTotalEnabled = takeoverTotalEnabled;
+        }
+        public boolean isResumeTotalEnabled() { return resumeTotalEnabled; }
+        public void setResumeTotalEnabled(boolean resumeTotalEnabled) {
+            this.resumeTotalEnabled = resumeTotalEnabled;
+        }
+        public boolean isReplayTotalEnabled() { return replayTotalEnabled; }
+        public void setReplayTotalEnabled(boolean replayTotalEnabled) {
+            this.replayTotalEnabled = replayTotalEnabled;
+        }
+        public boolean isLatencyEnabled() { return latencyEnabled; }
+        public void setLatencyEnabled(boolean latencyEnabled) { this.latencyEnabled = latencyEnabled; }
+        public boolean isCrossLoggerEnabled() { return crossLoggerEnabled; }
+        public void setCrossLoggerEnabled(boolean crossLoggerEnabled) {
+            this.crossLoggerEnabled = crossLoggerEnabled;
+        }
+        public String getHistogramSlo() { return histogramSlo; }
+        public void setHistogramSlo(String histogramSlo) { this.histogramSlo = histogramSlo; }
+        public long getResumeTimeoutMs() { return resumeTimeoutMs; }
+        public void setResumeTimeoutMs(long resumeTimeoutMs) { this.resumeTimeoutMs = resumeTimeoutMs; }
+    }
+
+    /**
+     * B3：离线消息合流策略配置。
+     * <p>详见 {@code openspec/changes/refine-flow-offline-merge-policy/design.md}.
+     */
+    public static class OfflineConfig {
+        /** 主开关；off 时所有 offline API 直接 no-op 返回 false / 0（退化 Phase A/B1 行为）。 */
+        private boolean enabled = true;
+        /** offline stream 保留天数；写入时设置 TTL。 */
+        private int retentionDays = 7;
+        /** NEW 登录时若兜底 stream 长度 ≥ 阈值则触发 RELOGIN。 */
+        private int reloginThreshold = 200;
+        /** RESUME 合流 / NEW drain 时单次 XRANGE batch 上限。 */
+        private int replayBatchSize = 100;
+        /** destroy 时若 reason == detached_ttl 则把 buffer 中未 ACK 帧 flush 到 offline stream。 */
+        private boolean flushOnDestroy = true;
+        /** cross-instance evict 时同上。 */
+        private boolean flushOnCrossEvict = true;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getRetentionDays() { return retentionDays; }
+        public void setRetentionDays(int retentionDays) { this.retentionDays = retentionDays; }
+        public int getReloginThreshold() { return reloginThreshold; }
+        public void setReloginThreshold(int reloginThreshold) { this.reloginThreshold = reloginThreshold; }
+        public int getReplayBatchSize() { return replayBatchSize; }
+        public void setReplayBatchSize(int replayBatchSize) { this.replayBatchSize = replayBatchSize; }
+        public boolean isFlushOnDestroy() { return flushOnDestroy; }
+        public void setFlushOnDestroy(boolean flushOnDestroy) { this.flushOnDestroy = flushOnDestroy; }
+        public boolean isFlushOnCrossEvict() { return flushOnCrossEvict; }
+        public void setFlushOnCrossEvict(boolean flushOnCrossEvict) { this.flushOnCrossEvict = flushOnCrossEvict; }
+    }
+
+    /**
+     * B2：跨实例 owner 迁移 + Pub/Sub eviction 配置。
+     * <p>详见 {@code openspec/changes/add-cross-instance-flow-takeover/design.md}.
+     */
+    public static class CrossConfig {
+        /** 主开关：off 时退回 Phase A 的 {@code REJECTED_OWNER_OTHER} 早退。 */
+        private boolean enabled = true;
+        /** Pub/Sub 通道名，默认 {@code gate:flow:evict}. */
+        private String evictChannel = "gate:flow:evict";
+        /** 调试用：是否发布 self → self 的 evict（一般保持 false）。 */
+        private boolean publishSelfEvict = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getEvictChannel() { return evictChannel; }
+        public void setEvictChannel(String evictChannel) { this.evictChannel = evictChannel; }
+        public boolean isPublishSelfEvict() { return publishSelfEvict; }
+        public void setPublishSelfEvict(boolean publishSelfEvict) { this.publishSelfEvict = publishSelfEvict; }
+    }
+
+    /**
+     * B1：per-FlowSession 下行缓冲配置。
+     * <p>详见 {@code openspec/changes/add-flow-downstream-buffer/design.md} §3 / §6。
+     */
+    public static class BufferConfig {
+        /** 全局开关；off 时退化为 Phase A 行为（不入 buffer / 不重放） */
+        private boolean enabled = true;
+        /** 单 FlowSession entries 上限 */
+        private int capacityEntries = 256;
+        /** 单 FlowSession 字节上限 */
+        private long capacityBytes = 4L * 1024L * 1024L;
+        /** overflow 策略：{@code drop_oldest} | {@code force_detach} */
+        private String overflowPolicy = "drop_oldest";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getCapacityEntries() { return capacityEntries; }
+        public void setCapacityEntries(int capacityEntries) { this.capacityEntries = capacityEntries; }
+        public long getCapacityBytes() { return capacityBytes; }
+        public void setCapacityBytes(long capacityBytes) { this.capacityBytes = capacityBytes; }
+        public String getOverflowPolicy() { return overflowPolicy; }
+        public void setOverflowPolicy(String overflowPolicy) { this.overflowPolicy = overflowPolicy; }
+    }
+
+    /**
+     * B1：服务端 features 通告配置。
+     */
+    public static class FeaturesConfig {
+        /** 是否向客户端通告支持 gwSeq stamp */
+        private boolean advertiseGwSeq = true;
+        /** 是否向客户端通告支持 RESUME 重放 */
+        private boolean advertiseReplay = true;
+
+        public boolean isAdvertiseGwSeq() { return advertiseGwSeq; }
+        public void setAdvertiseGwSeq(boolean advertiseGwSeq) { this.advertiseGwSeq = advertiseGwSeq; }
+        public boolean isAdvertiseReplay() { return advertiseReplay; }
+        public void setAdvertiseReplay(boolean advertiseReplay) { this.advertiseReplay = advertiseReplay; }
+    }
 }

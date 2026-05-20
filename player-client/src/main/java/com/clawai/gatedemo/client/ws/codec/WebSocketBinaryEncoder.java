@@ -44,13 +44,18 @@ public class WebSocketBinaryEncoder extends MessageToMessageEncoder<WrappedMessa
 
         header.setBodyLength(finalBodyBytes.length);
         header.setCompressed(needCompress);
+        boolean withGwSeq = header.hasGwSeq();
 
-        ByteBuf buf = ctx.alloc().buffer(16 + finalBodyBytes.length);
+        int totalSize = 16 + (withGwSeq ? 8 : 0) + finalBodyBytes.length;
+        ByteBuf buf = ctx.alloc().buffer(totalSize);
         buf.writeShort(header.getFlags());
         buf.writeShort(header.getSequence());
         buf.writeInt(header.getMessageId());
         buf.writeInt(header.getBodyLength());
         buf.writeInt(header.getRequestId());
+        if (withGwSeq) {
+            buf.writeLong(header.getGwSeq());
+        }
 
         if (finalBodyBytes.length > 0) {
             buf.writeBytes(finalBodyBytes);

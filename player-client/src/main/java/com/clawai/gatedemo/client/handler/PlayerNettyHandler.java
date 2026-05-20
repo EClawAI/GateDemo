@@ -1,6 +1,7 @@
 package com.clawai.gatedemo.client.handler;
 
 import com.clawai.gatedemo.client.config.PlayerClientConfig;
+import com.clawai.gatedemo.client.flow.FlowSessionStore;
 import com.clawai.gatedemo.client.protocol.model.MessageHeader;
 import com.clawai.gatedemo.common.route.MessageRouteRegistry;
 import com.clawai.gatedemo.client.protocol.model.RawMessageBody;
@@ -9,6 +10,7 @@ import com.clawai.gatedemo.proto.gate.AuthRequest;
 import com.clawai.gatedemo.proto.gate.AuthResponse;
 import com.clawai.gatedemo.proto.gate.ClientHeartbeat;
 import com.clawai.gatedemo.proto.gate.HeartbeatAck;
+import com.clawai.gatedemo.proto.gate.ResumeStatus;
 import com.clawai.gatedemo.proto.game.CgBattleMove;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -26,11 +28,17 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
 
     private static final Logger logger = LoggerFactory.getLogger(PlayerNettyHandler.class);
 
-    private final PlayerClientConfig config;
-    private boolean connected = false;
+    /** B1 client_features: bit0 supports_gw_seq | bit1 supports_resume_replay. */
+    private static final int CLIENT_FEATURES = 0x3;
 
-    public PlayerNettyHandler(PlayerClientConfig config) {
+    private final PlayerClientConfig config;
+    private final FlowSessionStore flowSessionStore;
+    private boolean connected = false;
+    private volatile int serverFeatures = 0;
+
+    public PlayerNettyHandler(PlayerClientConfig config, FlowSessionStore flowSessionStore) {
         this.config = config;
+        this.flowSessionStore = flowSessionStore;
     }
 
     @Override
@@ -56,10 +64,26 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
         int messageId = message.getHeader().getMessageId();
         byte[] bodyBytes = message.getBody() != null ? message.getBody().toBytes() : new byte[0];
 
+        if (message.getHeader().hasGwSeq()) {
+            long gwSeq = message.getHeader().getGwSeq();
+            if (gwSeq > flowSessionStore.getLastClientRecvSeq()) {
+                flowSessionStore.update(flowSessionStore.getFlowId(), gwSeq);
+            }
+        }
+
         if (messageId == MessageRouteRegistry.getIdByName("AuthRequest")) {
             AuthResponse resp = AuthResponse.parseFrom(bodyBytes);
             if (resp.getSuccess()) {
-                logger.info("认证成功！玩家 ID: {}", resp.getPlayerId());
+                serverFeatures = resp.getServerFeatures();
+                logger.info("认证成功！玩家 ID: {}, flowId={}, status={}, serverFeatures=0x{}",
+                        resp.getPlayerId(), resp.getFlowId(), resp.getResumeStatus().name(),
+                        Integer.toHexString(serverFeatures));
+                flowSessionStore.update(resp.getFlowId(), flowSessionStore.getLastClientRecvSeq());
+                if (resp.getResumeStatus() == ResumeStatus.REJECTED_EXPIRED
+                        || resp.getResumeStatus() == ResumeStatus.REJECTED_MISMATCH
+                        || resp.getResumeStatus() == ResumeStatus.REJECTED_OWNER_OTHER) {
+                    logger.warn("RESUME 被拒（{}），已降级 NEW", resp.getResumeStatus());
+                }
             } else {
                 logger.warn("认证失败: {}", resp.getMessage());
             }
@@ -91,10 +115,17 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
             ctx.close();
             return;
         }
-        AuthRequest authReq = AuthRequest.newBuilder()
+        String savedFlowId = flowSessionStore.getFlowId();
+        long savedSeq = flowSessionStore.getLastClientRecvSeq();
+        AuthRequest.Builder builder = AuthRequest.newBuilder()
                 .setToken(token)
                 .setGameId(config.getGameId())
-                .build();
+                .setLastClientRecvSeq(savedSeq)
+                .setClientFeatures(CLIENT_FEATURES);
+        if (savedFlowId != null && !savedFlowId.isBlank()) {
+            builder.setFlowId(savedFlowId);
+        }
+        AuthRequest authReq = builder.build();
 
         WrappedMessage msg = new WrappedMessage();
         msg.getHeader().setMessageId(MessageRouteRegistry.getIdByName("AuthRequest"));
@@ -102,21 +133,27 @@ public class PlayerNettyHandler extends SimpleChannelInboundHandler<WrappedMessa
         msg.setBody(new RawMessageBody(authReq.toByteArray()));
 
         ctx.writeAndFlush(msg);
-        logger.info("发送认证消息：playerId={}", config.getPlayerId());
+        logger.info("发送认证消息：playerId={}, flowId={}, lastClientRecvSeq={}, clientFeatures=0x{}",
+                config.getPlayerId(),
+                savedFlowId == null || savedFlowId.isBlank() ? "<empty:NEW>" : savedFlowId,
+                savedSeq,
+                Integer.toHexString(CLIENT_FEATURES));
     }
 
     public void sendHeartbeat(ChannelHandlerContext ctx) {
         if (!connected) return;
 
         ClientHeartbeat hb = ClientHeartbeat.newBuilder()
-                .setTimestamp(System.currentTimeMillis()).build();
+                .setTimestamp(System.currentTimeMillis())
+                .setLastClientRecvSeq(flowSessionStore.getLastClientRecvSeq())
+                .build();
 
         WrappedMessage msg = new WrappedMessage();
         msg.getHeader().setMessageId(MessageRouteRegistry.getIdByName("ClientHeartbeat"));
         msg.setBody(new RawMessageBody(hb.toByteArray()));
 
         ctx.writeAndFlush(msg);
-        logger.debug("发送心跳");
+        logger.debug("发送心跳 lastClientRecvSeq={}", flowSessionStore.getLastClientRecvSeq());
     }
 
     public void sendGameMessage(ChannelHandlerContext ctx, int x, int y) {

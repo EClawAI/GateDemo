@@ -81,34 +81,37 @@ public class GameMessageDecoder extends ByteToMessageDecoder {
 
         // 步骤3: 读取消息头（16字节）
         // 读取顺序必须与Encoder写入顺序完全一致
-        short flags = in.readShort();      // 2字节：标志位
-        short sequence = in.readShort();   // 2字节：序列号
-        int messageId = in.readInt();      // 4字节：消息ID
-        int bodyLength = in.readInt();     // 4字节：消息体长度
-        int requestId = in.readInt();      // 4字节：请求ID
+        short flags = in.readShort();
+        short sequence = in.readShort();
+        int messageId = in.readInt();
+        int bodyLength = in.readInt();
+        int requestId = in.readInt();
 
-        // 步骤4: 验证消息体长度（安全检查）
-        // 负数或超过最大值，可能是恶意攻击
         if (bodyLength < 0 || bodyLength > MAX_BODY_LENGTH) {
             logger.error("Invalid body length: {}, closing connection", bodyLength);
-            ctx.close();  // 关闭连接
+            ctx.close();
             return;
         }
 
-        // 步骤5: 检查是否读到完整的消息体
-        // 不够则回退readerIndex，等待下次数据到达
+        boolean hasGwSeq = (flags & MessageHeader.FLAG_HAS_GW_SEQ) != 0;
+        if (hasGwSeq && in.readableBytes() < 8) {
+            in.resetReaderIndex();
+            return;
+        }
+        long gwSeq = hasGwSeq ? in.readLong() : 0L;
+
         if (in.readableBytes() < bodyLength) {
-            in.resetReaderIndex();  // 回退到标记位置
-            return;  // 数据不完整，等待下次数据到达
+            in.resetReaderIndex();
+            return;
         }
 
-        // 步骤6: 解析消息头
         MessageHeader header = new MessageHeader();
         header.setFlags(flags);
         header.setSequence(sequence);
         header.setMessageId(messageId);
         header.setBodyLength(bodyLength);
         header.setRequestId(requestId);
+        header.setGwSeq(gwSeq);
 
         // 步骤7: 读取消息体
         byte[] bodyBytes = new byte[0];

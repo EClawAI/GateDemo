@@ -44,12 +44,21 @@ public class WebSocketBinaryDecoder extends MessageToMessageDecoder<BinaryWebSoc
             return;
         }
 
+        boolean hasGwSeq = (flags & MessageHeader.FLAG_HAS_GW_SEQ) != 0;
+        if (hasGwSeq && in.readableBytes() < 8) {
+            logger.error("FLAG_HAS_GW_SEQ 置位但帧长不足 gwSeq 字段");
+            ctx.close();
+            return;
+        }
+        long gwSeq = hasGwSeq ? in.readLong() : 0L;
+
         MessageHeader header = new MessageHeader();
         header.setFlags(flags);
         header.setSequence(sequence);
         header.setMessageId(messageId);
         header.setBodyLength(bodyLength);
         header.setRequestId(requestId);
+        header.setGwSeq(gwSeq);
 
         byte[] bodyBytes = new byte[0];
         if (bodyLength > 0 && in.readableBytes() >= bodyLength) {

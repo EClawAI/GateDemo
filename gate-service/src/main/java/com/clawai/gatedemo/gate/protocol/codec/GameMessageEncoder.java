@@ -81,23 +81,24 @@ public class GameMessageEncoder extends MessageToByteEncoder<WrappedMessage> {
 
         header.setBodyLength(finalBodyBytes.length);
         header.setCompressed(compressed);
+        boolean withGwSeq = header.hasGwSeq();
 
-        // 步骤5: 写入消息头（固定14字节）
-        // 写入顺序必须与解码器一致
-        out.writeShort(header.getFlags());      // 2字节：标志位
-        out.writeShort(header.getSequence());   // 2字节：序列号
-        out.writeInt(header.getMessageId());    // 4字节：消息ID
-        out.writeInt(header.getBodyLength());   // 4字节：消息体长度
-        out.writeInt(header.getRequestId());    // 4字节：请求ID
+        out.writeShort(header.getFlags());
+        out.writeShort(header.getSequence());
+        out.writeInt(header.getMessageId());
+        out.writeInt(header.getBodyLength());
+        out.writeInt(header.getRequestId());
+        if (withGwSeq) {
+            out.writeLong(header.getGwSeq());
+        }
 
-        // 步骤6: 写入消息体
         if (finalBodyBytes.length > 0) {
             out.writeBytes(finalBodyBytes);
         }
 
-        // 调试日志：记录编码结果
-        logger.debug("Encoded message: msgId={}, bodyLength={}, compressed={}",
-                header.getMessageId(), header.getBodyLength(), compressed);
+        logger.debug("Encoded message: msgId={}, bodyLength={}, compressed={}, gwSeq={}",
+                header.getMessageId(), header.getBodyLength(), compressed,
+                withGwSeq ? header.getGwSeq() : "-");
     }
 
     /**
