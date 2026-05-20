@@ -10,18 +10,49 @@ package gateprotocol;
 // ==================== 认证 ====================
 
 // 客户端 → 网关：认证请求
+//
+// flow_id / last_client_recv_seq 为可选字段，配合 RESUME 路径使用：
+//   - 缺省（或 flow_id 为空字符串）→ NEW 路径，服务端 mint 新 flow_id；
+//   - 携带有效 flow_id → RESUME 路径，服务端尝试换绑既有 FlowSession。
+// 详见 GateDemo/openspec/changes/add-netun-resume-flow-session/。
 message AuthRequest {
   option (gateoptions.route_to) = "gate";
 
   string token = 1;
   int32 game_id = 2;
+  string flow_id = 3;                 // 可选；为空视为 NEW
+  uint64 last_client_recv_seq = 4;    // 可选；Phase A 仅记录，B1 驱动 RESUME 重放
+  // 客户端能力位（B1 引入），见 design.md §2：
+  //   bit 0 (0x1) = supports_gw_seq
+  //   bit 1 (0x2) = supports_resume_replay
+  // 缺省 0 表示老客户端，服务端保持 Phase A 行为。
+  uint32 client_features = 5;
 }
 
 // 网关 → 客户端：认证响应
+//
+// flow_id 在 success=true 的所有路径下均会返回（NEW / RESUMED 都有效）；
+// resume_status 帮助客户端区分两条路径，未识别值视为 NEW。
 message AuthResponse {
   bool success = 1;
   int64 player_id = 2;
   string message = 3;
+  string flow_id = 4;
+  ResumeStatus resume_status = 5;
+  // 服务端实际启用的能力位（B1 引入）。等于
+  //   (client_features & server_advertised_features)
+  // 客户端 SHALL 按本字段决定是否走 buffer/replay 路径。
+  uint32 server_features = 6;
+}
+
+// AUTH 响应的会话状态。客户端可据此决策是否重发未确认请求。
+enum ResumeStatus {
+  RESUME_STATUS_UNSPECIFIED = 0;
+  NEW = 1;                              // 服务端首次 mint flow_id
+  RESUMED = 2;                          // 同 flow_id 成功换绑
+  REJECTED_EXPIRED = 3;                 // flow 在 Redis 中已过期，已降级 NEW
+  REJECTED_MISMATCH = 4;                // playerId / token 不一致，已降级 NEW
+  REJECTED_OWNER_OTHER = 5;             // ownerGateId 非本实例（Phase A 拒绝跨实例），已降级 NEW
 }
 
 // ==================== 心跳 ====================
@@ -31,6 +62,8 @@ message ClientHeartbeat {
   option (gateoptions.route_to) = "gate";
 
   int64 timestamp = 1;
+  // 客户端已成功处理的最大 gwSeq（B1 引入）。0 视为「无 ACK」。
+  uint64 last_client_recv_seq = 2;
 }
 
 // 网关 → 客户端：心跳应答

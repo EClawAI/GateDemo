@@ -10,6 +10,8 @@ This document describes all Redis keys used in the GateDemo project, their TTL s
 | `gate:{gateId}:heartbeat` | 120s | login-service | Gate instance heartbeat (aliased as `gate:online:{gateId}`) |
 | `player:session:{playerId}` | Configurable | Various | Player session data; TTL via config |
 | `game:status:{gameId}` | 120s | game-service | Game server status (online count, etc.) |
+| `gate:flow:{flowId}` | `gate.flow.detached-ttl-seconds` (default 60s, ATTACHED renewed every `renewal-interval-seconds`) | gate-service | FlowSession metadata Hash (`playerId`, `gameId`, `ownerGateId`, `createdAt`, `expiresAt`, `detachedAt`, `lastSeqAnchor`); enables weak-network RESUME |
+| `gate:flow:byplayer:{playerId}` | Same as `gate:flow:{flowId}` | gate-service | Index pointing to the player's current active `flowId`; mutated atomically by `lua/flow_takeover.lua` |
 
 ### Key Details
 
