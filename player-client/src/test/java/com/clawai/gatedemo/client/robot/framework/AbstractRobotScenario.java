@@ -57,16 +57,47 @@ public abstract class AbstractRobotScenario {
         opened.clear();
     }
 
-    /** 申请并启动一个新 robot；afterEach 自动关闭。 */
+    /** 申请并启动一个新 robot（连主 WS 端口）；afterEach 自动关闭。 */
     protected RobotClient newRobot() throws InterruptedException {
+        return newRobotOnWs(env.wsPort());
+    }
+
+    /** 连指定 WS 端口；S04 跨实例场景使用主/从两个 gate 端口。 */
+    protected RobotClient newRobotOnWs(int wsPort) throws InterruptedException {
         RobotClient c = RobotClient.builder()
                 .host(env.host())
-                .wsPort(env.wsPort())
+                .wsPort(wsPort)
                 .connectTimeout(Duration.ofMillis(env.timeoutMs()))
                 .receiveTimeout(Duration.ofMillis(env.timeoutMs()))
                 .build();
         c.connect();
         opened.add(c);
         return c;
+    }
+
+    /** 连 TCP 端口；S06 多 transport 场景使用。 */
+    protected RobotClient newRobotOnTcp(int tcpPort) throws InterruptedException {
+        RobotClient c = RobotClient.builder()
+                .host(env.host())
+                .tcpPort(tcpPort)
+                .connectTimeout(Duration.ofMillis(env.timeoutMs()))
+                .receiveTimeout(Duration.ofMillis(env.timeoutMs()))
+                .build();
+        c.connect();
+        opened.add(c);
+        return c;
+    }
+
+    /**
+     * 短暂 sleep；用于场景必须等 server 完成异步动作（如 detached 扫描）的场合。
+     * 调用方应给出明确语义注释，避免被误读为「重试」。
+     */
+    protected void sleepQuiet(Duration d) {
+        try {
+            Thread.sleep(d.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("scenario interrupted while sleeping", e);
+        }
     }
 }

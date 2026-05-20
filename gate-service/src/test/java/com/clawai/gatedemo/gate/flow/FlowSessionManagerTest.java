@@ -932,7 +932,7 @@ class FlowSessionManagerTest {
             byPlayer.put(record.playerId(), record.flowId());
         }
 
-        void setCrossOutcome(CrossState state, String previousOwner) {
+        public void setCrossOutcome(CrossState state, String previousOwner) {
             this.forcedCrossState = state;
             this.forcedPreviousOwner = previousOwner;
         }

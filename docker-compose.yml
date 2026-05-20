@@ -135,6 +135,7 @@ services:
     ports:
       - "8888:8888"
       - "8890:8890"
+      - "9999:9999"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - GATE_ID=gate-01
@@ -146,6 +147,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=redistest
       - JWT_SECRET=${JWT_SECRET:-DefaultGateDemoSecretKeyForHMACSHA256Auth!}
+      # S06 多 transport 场景：启用 TCP（与 WS 同时监听）
+      - GATE_TCP_ENABLED=true
+      - GATE_TCP_PORT=9999
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8890/health"]
       interval: 10s
@@ -178,6 +182,9 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=redistest
       - JWT_SECRET=${JWT_SECRET:-DefaultGateDemoSecretKeyForHMACSHA256Auth!}
+      # gate-02 暂不映射 TCP（端口冲突），S06 仅校验 gate-01 上 WS+TCP 共存；
+      # S04 跨实例只走 WS，不需要 gate-02 启 TCP。
+      - GATE_TCP_ENABLED=false
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8890/health"]
       interval: 10s

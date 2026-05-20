@@ -35,10 +35,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * 自动化测试用的轻量级 robot client：复用 player-client 的 codec 与协议模型，
@@ -77,8 +81,15 @@ public final class RobotClient implements AutoCloseable {
         }
     }
 
+    /**
+     * 传输模式：WS（默认，复用 player-client 现有 ws codec）/ TCP（直连 gate.tcp.port，复用
+     * gate-service 的 game codec 等价帧格式）。
+     */
+    public enum Transport { WS, TCP }
+
     private final String host;
-    private final int wsPort;
+    private final int port;
+    private final Transport transport;
     private final String path;
     private final Duration connectTimeout;
     private final Duration receiveTimeout;
@@ -93,7 +104,8 @@ public final class RobotClient implements AutoCloseable {
 
     private RobotClient(Builder b) {
         this.host = b.host;
-        this.wsPort = b.wsPort;
+        this.port = b.port;
+        this.transport = b.transport;
         this.path = b.path;
         this.connectTimeout = b.connectTimeout;
         this.receiveTimeout = b.receiveTimeout;
@@ -104,36 +116,57 @@ public final class RobotClient implements AutoCloseable {
         return new Builder();
     }
 
-    /** 同步连接 + 完成 WebSocket 握手；返回时可以立即 {@link #auth}。 */
+    /**
+     * 同步连接 + 完成握手（WS 模式才有 handshake，TCP 模式跳过）；返回时可以立即 {@link #auth}。
+     */
     public void connect() throws InterruptedException {
         this.group = new NioEventLoopGroup(1);
         Bootstrap b = new Bootstrap();
         this.handler = new RobotInboundHandler();
+        final Transport mode = this.transport;
         b.group(group)
                 .channel(NioSocketChannel.class)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) connectTimeout.toMillis())
+                .option(ChannelOption.TCP_NODELAY, true)
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
                     protected void initChannel(SocketChannel ch) {
                         ChannelPipeline p = ch.pipeline();
-                        p.addLast("httpCodec", new HttpClientCodec());
-                        p.addLast("httpAgg", new HttpObjectAggregator(8192));
-                        WebSocketClientProtocolConfig wsCfg = WebSocketClientProtocolConfig.newBuilder()
-                                .webSocketUri("ws://" + host + ":" + wsPort + path)
-                                .build();
-                        p.addLast("wsProtocol", new WebSocketClientProtocolHandler(wsCfg));
-                        p.addLast("wsBinaryEncoder", new com.clawai.gatedemo.client.ws.codec.WebSocketBinaryEncoder());
-                        p.addLast("wsBinaryDecoder", new com.clawai.gatedemo.client.ws.codec.WebSocketBinaryDecoder());
+                        if (mode == Transport.WS) {
+                            p.addLast("httpCodec", new HttpClientCodec());
+                            p.addLast("httpAgg", new HttpObjectAggregator(8192));
+                            WebSocketClientProtocolConfig wsCfg = WebSocketClientProtocolConfig.newBuilder()
+                                    .webSocketUri("ws://" + host + ":" + port + path)
+                                    .build();
+                            p.addLast("wsProtocol", new WebSocketClientProtocolHandler(wsCfg));
+                            p.addLast("wsBinaryEncoder", new com.clawai.gatedemo.client.ws.codec.WebSocketBinaryEncoder());
+                            p.addLast("wsBinaryDecoder", new com.clawai.gatedemo.client.ws.codec.WebSocketBinaryDecoder());
+                        } else {
+                            // TCP 模式：直接使用 16 字节定长头 + 变长 body 的二进制协议，
+                            // 复用 player-client 现有 ClientMessage{Encoder,Decoder}（与 gate
+                            // 的 GameMessage{Encoder,Decoder} 帧格式严格一致）。
+                            p.addLast("binaryDecoder", new ClientMessageDecoder());
+                            p.addLast("binaryEncoder", new ClientMessageEncoder());
+                        }
                         p.addLast("inbound", handler);
                     }
                 });
-        ChannelFuture f = b.connect(host, wsPort).sync();
+        ChannelFuture f = b.connect(host, port).sync();
         this.channel = f.channel();
-        if (!handler.awaitHandshake(connectTimeout)) {
-            throw new IllegalStateException("WebSocket handshake timed out after " + connectTimeout);
+        if (mode == Transport.WS) {
+            if (!handler.awaitHandshake(connectTimeout)) {
+                throw new IllegalStateException("WebSocket handshake timed out after " + connectTimeout);
+            }
+        } else {
+            // TCP 模式无 handshake；channel.isActive() 即视为就绪。
+            handler.markTcpReady();
         }
         this.handshakeDone = true;
-        logger.info("Robot connected to ws://{}:{}{}", host, wsPort, path);
+        if (mode == Transport.WS) {
+            logger.info("Robot connected via WS to ws://{}:{}{}", host, port, path);
+        } else {
+            logger.info("Robot connected via TCP to {}:{}", host, port);
+        }
     }
 
     /** 发起 AUTH（NEW path：不带 flowId）；阻塞等待 AuthResponse。 */
@@ -194,9 +227,43 @@ public final class RobotClient implements AutoCloseable {
         return Optional.empty();
     }
 
+    /** 阻塞等待第一个满足 predicate 的帧；超时返回 empty。 */
+    public Optional<WrappedMessage> awaitMessage(Predicate<WrappedMessage> filter, Duration timeout)
+            throws InterruptedException {
+        ensureOpen();
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            long left = Math.max(0, deadline - System.nanoTime());
+            WrappedMessage wm = handler.poll(Duration.ofNanos(left));
+            if (wm == null) return Optional.empty();
+            if (filter.test(wm)) {
+                return Optional.of(wm);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 注册事件型订阅：每次 inbound 收到指定 messageId 都会异步触发 callback。
+     * <p>用于 S07 并发场景：N 个 robot 各自累计 HeartbeatAck 数量但不阻塞 main 测试线程。
+     */
+    public void subscribe(int messageId, Consumer<WrappedMessage> callback) {
+        handler.subscribe(messageId, callback);
+    }
+
     /** 取出当前已收到的所有帧快照（不阻塞）。 */
     public List<WrappedMessage> drainInbox() {
         return handler.drain();
+    }
+
+    /** 等待 channel 进入 inactive 状态（适合 S04 被 evict 后验证）；超时返回 false。 */
+    public boolean awaitInactive(Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            if (channel == null || !channel.isActive()) return true;
+            Thread.sleep(20);
+        }
+        return false;
     }
 
     /** 发送一次心跳。 */
@@ -245,6 +312,8 @@ public final class RobotClient implements AutoCloseable {
 
         private final BlockingQueue<WrappedMessage> inbox = new LinkedBlockingQueue<>();
         private final CopyOnWriteArrayList<PendingExpect> pending = new CopyOnWriteArrayList<>();
+        private final ConcurrentMap<Integer, CopyOnWriteArrayList<Consumer<WrappedMessage>>> subscribers
+                = new ConcurrentHashMap<>();
         private final CompletableFuture<Void> handshakeFuture = new CompletableFuture<>();
 
         boolean awaitHandshake(Duration timeout) {
@@ -254,6 +323,11 @@ public final class RobotClient implements AutoCloseable {
             } catch (Exception e) {
                 return false;
             }
+        }
+
+        /** TCP 模式无 handshake；直接置位让 awaitHandshake 立刻返回 true。 */
+        void markTcpReady() {
+            handshakeFuture.complete(null);
         }
 
         CompletableFuture<WrappedMessage> expect(int messageId) {
@@ -272,6 +346,10 @@ public final class RobotClient implements AutoCloseable {
             return out;
         }
 
+        void subscribe(int messageId, Consumer<WrappedMessage> callback) {
+            subscribers.computeIfAbsent(messageId, k -> new CopyOnWriteArrayList<>()).add(callback);
+        }
+
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
             if (evt instanceof WebSocketClientProtocolHandler.ClientHandshakeStateEvent ev
@@ -286,7 +364,18 @@ public final class RobotClient implements AutoCloseable {
             if (h.hasGwSeq() && h.getGwSeq() > lastClientRecvSeq.get()) {
                 lastClientRecvSeq.set(h.getGwSeq());
             }
-            // 优先派发给最早 expect 同 messageId 的等待者
+            // 1) 事件订阅者：所有都触发，不消费帧
+            CopyOnWriteArrayList<Consumer<WrappedMessage>> subs = subscribers.get(h.getMessageId());
+            if (subs != null) {
+                for (Consumer<WrappedMessage> c : subs) {
+                    try {
+                        c.accept(msg);
+                    } catch (Throwable t) {
+                        logger.warn("Robot subscriber threw: {}", t.toString());
+                    }
+                }
+            }
+            // 2) 优先派发给最早 expect 同 messageId 的等待者
             for (PendingExpect p : pending) {
                 if (p.messageId == h.getMessageId() && !p.future.isDone()) {
                     p.future.complete(msg);
@@ -320,14 +409,30 @@ public final class RobotClient implements AutoCloseable {
 
     public static final class Builder {
         private String host = "127.0.0.1";
-        private int wsPort = 8888;
+        private int port = 8888;
+        private Transport transport = Transport.WS;
         private String path = "/ws";
         private Duration connectTimeout = Duration.ofSeconds(5);
         private Duration receiveTimeout = Duration.ofSeconds(5);
         private boolean shareEventLoop = false;
 
         public Builder host(String h) { this.host = h; return this; }
-        public Builder wsPort(int p) { this.wsPort = p; return this; }
+        /** 设置 WS 端口（向后兼容：等价 {@code port(p).transport(WS)}）。 */
+        public Builder wsPort(int p) {
+            this.port = p;
+            this.transport = Transport.WS;
+            return this;
+        }
+        /** 设置 TCP 端口；同时把 transport 切到 {@link Transport#TCP}。 */
+        public Builder tcpPort(int p) {
+            this.port = p;
+            this.transport = Transport.TCP;
+            return this;
+        }
+        /** 显式指定 transport；与 {@link #wsPort(int)} / {@link #tcpPort(int)} 互斥。 */
+        public Builder transport(Transport t) { this.transport = t; return this; }
+        /** 显式指定端口（不改变 transport）。 */
+        public Builder port(int p) { this.port = p; return this; }
         public Builder path(String p) { this.path = p; return this; }
         public Builder connectTimeout(Duration d) { this.connectTimeout = d; return this; }
         public Builder receiveTimeout(Duration d) { this.receiveTimeout = d; return this; }

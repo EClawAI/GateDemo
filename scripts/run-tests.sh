@@ -170,7 +170,8 @@ if [[ "$RUN_E2E" == "1" ]]; then
 
     E2E_LOG="$REPORT_ROOT/e2e/maven.log"
     COMPOSE_LOG="$REPORT_ROOT/e2e/docker-compose.log"
-    E2E_SERVICES="redis mongodb center-service login-service game-1001 gate-01"
+    # P1：S04 需 gate-02；S06 需 gate-01 启用 TCP（已在 compose 中固化）
+    E2E_SERVICES="redis mongodb center-service login-service game-1001 gate-01 gate-02"
 
     log_info "Building docker images (if needed) ..."
     ( cd "$GATE_DEMO_ROOT" && docker compose build $E2E_SERVICES ) > "$COMPOSE_LOG" 2>&1
@@ -187,14 +188,27 @@ if [[ "$RUN_E2E" == "1" ]]; then
             E2E_STATUS=$START_RC
         else
             log_info "Waiting for gate-01 health (max 90s) ..."
+            GATE_01_OK=0
             if wait_http "http://127.0.0.1:8890/health" 90; then
+                GATE_01_OK=1
+            fi
+            if [[ "$GATE_01_OK" == "1" ]]; then
+                log_info "Waiting for gate-02 health (max 60s; S04 cross-instance) ..."
+                if ! wait_http "http://127.0.0.1:8891/health" 60; then
+                    log_warn "gate-02 not healthy; S04 (cross-instance takeover) will be skipped via assumeTrue"
+                fi
+            fi
+            if [[ "$GATE_01_OK" == "1" ]]; then
                 log_info "gate-01 healthy; running robot scenarios ..."
                 set +e
                 ( cd "$GATE_DEMO_ROOT" && \
                     GATE_E2E=true \
                     GATE_E2E_HOST=127.0.0.1 \
                     GATE_E2E_WS_PORT=8888 \
+                    GATE_E2E_WS_PORT_2=8889 \
+                    GATE_E2E_TCP_PORT=9999 \
                     GATE_E2E_LOGIN_URL=http://127.0.0.1:9086 \
+                    GATE_E2E_DETACHED_TTL_SECONDS=60 \
                     mvn -pl player-client -am \
                         -DskipTests=false \
                         -Djacoco.skip=true \
